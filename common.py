@@ -20,6 +20,8 @@ def run_dir(cfg, seed):
 
 
 def make_env(cfg, render_mode=None, **render_kwargs):
+    import warnings
+
     import gymnasium as gym
     from sb3_contrib.common.wrappers import TimeFeatureWrapper
 
@@ -31,6 +33,9 @@ def make_env(cfg, render_mode=None, **render_kwargs):
     if render_mode is not None:  # panda-gym 3 rejects render_mode=None (its default rgb_array is headless)
         render_kwargs["render_mode"] = render_mode
     env = gym.make(cfg["env_id"], **cfg.get("env_kwargs", {}), **render_kwargs)
+    # TimeFeatureWrapper widens the inner env's Dict space in place, so gymnasium's passive checker
+    # (which sees the raw 6-D observation) warns on every reset/step; harmless
+    warnings.filterwarnings("ignore", message=".*is not within the observation space")
     return TimeFeatureWrapper(env)
 
 
