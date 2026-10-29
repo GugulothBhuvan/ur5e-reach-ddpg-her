@@ -10,13 +10,26 @@ Design notes are in [SPEC.md](SPEC.md).
 
 ## Results
 
-RESULTS_TABLE
+| | Steps | Test success | Mean final distance | Wall-clock |
+|---|---|---|---|---|
+| Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | ~5.8 h (~48 steps/s) |
+| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | 2.9 h per seed (1 CPU core, ~2.85 steps/s) |
+| **UR5e + 2F-85, ours** (seed 0) | 30,000 | **100 %** | 3.6 cm | 2.8 h (1 CPU core, ~2.9 steps/s) |
+
+"Test success" means 100 deterministic episodes on goals never used in training. Both phases pass their acceptance
+bars (95 % Panda, 90 % UR5e). Both robots reach 100 % on the 20-goal checks by about 2,000-2,500 steps and stay
+there (curves below).
+
+The final distance sits just under 5 cm because an episode ends as soon as the TCP is within 5 cm, so it is not a
+precision measure; the 2 cm-threshold runs test precision. Seed 0 of each robot is being continued to 100k steps;
+those numbers and the stretch runs (pure DDPG, SAC + HER, 2 cm threshold, joint-space actions) will be added here
+when they finish.
 
 | Panda (`PandaReach-v3`) | UR5e + 2F-85 (`UR5eReach-v0`) |
 |---|---|
 | ![panda](results/videos/panda_ddpg_s0.gif) | ![ur5e](results/videos/ur5e_ddpg_s0.gif) |
 
-MP4s are in [results/videos/](results/videos/). Learning curves:
+Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2 s). MP4s for every seed are in [results/videos/](results/videos/). Learning curves (in-training rollout success and 20-goal deterministic evaluations; stars are the tutorial's logged points):
 
 ![learning curves](results/plots/learning_curves.png)
 
@@ -34,13 +47,33 @@ python record.py --config configs/panda_ddpg.yaml --seed 0      # results/videos
 python plot.py panda_ddpg ur5e_ddpg                             # results/plots/learning_curves.png
 ```
 
+Or run the whole pipeline in one go (parallel training, tests, videos, plots, `results/summary.md`):
+`python run_all.py --jobs panda_ddpg:0,1,2 ur5e_ddpg:0 --steps 30000 --parallel 4`. Free or cheap GPU and cloud
+options (Kaggle, RunPod, Ola Krutrim) are covered in [docs/CLOUD.md](docs/CLOUD.md).
+
 Swap in `configs/ur5e_ddpg.yaml` for Phase B. `train.py --steps N` overrides the config's step budget.
 Rendering is headless (MuJoCo via OSMesa: `apt install libosmesa6`; panda-gym via PyBullet's TinyRenderer).
 The updated tutorial notebook is [notebooks/panda_reach_ddpg_her.ipynb](notebooks/panda_reach_ddpg_her.ipynb).
 
 ## Differences from the tutorial
 
-DIFFERENCES
+| Tutorial | This repo | Why |
+|---|---|---|
+| panda-gym 2.0.0 `PandaReach-v2`, `gym` | panda-gym 3.0.7 `PandaReach-v3`, `gymnasium` 1.4 | 2.0.0 does not install with today's libraries. The API change: `reset()` returns `(obs, info)` and `step()` returns `terminated, truncated`. |
+| Episodes always last 50 steps (v2's `step()` returns `done=False`) | Episodes **end on success** (v3) and are truncated at 50 | Part of v3. It also makes the rollout success rate (mean over the last 100 episodes) catch up faster: in the tutorial that window covered ~5,000 steps, which is one reason its logged curve (70 % at 5k, 95 % at 7k) rises later than ours. |
+| SB3 1.5, `HerReplayBuffer(online_sampling=True, max_episode_length=...)` | SB3 2.9.2: `online_sampling` and `max_episode_length` dropped | SB3 >= 1.8 always samples HER goals online and reads the episode length from the env. |
+| SB3 1.5 DDPG defaults: `train_freq=(1, "episode")`, `gradient_steps=-1` | SB3 2.x defaults: `train_freq=1`, `gradient_steps=1` | Same ratio of one gradient step per environment step; only the timing differs. |
+| Python 3.7, GPU, 1e6 steps | Python 3.11, CPU only, 30k steps (seed 0 continued to 100k) | No GPU here. With these settings one CPU core does ~2.9 steps/s (1e6 steps would take ~4 days), and the curve is flat at 100 % from ~2.5k steps. |
+| Rollout success only | Plus 100 deterministic test episodes on held-out goals, mean final distance, and 20-goal evaluations every 2.5k steps | Required outputs. |
+
+Unchanged: `TimeFeatureWrapper`, HER `future` with 4 sampled goals, `gamma=0.95`, `batch_size=2048`,
+`buffer_size=100_000`, `learning_rate=1e-3`, `net_arch=[512, 512, 512]`, `n_critics=2`, `NormalActionNoise(sigma=0.1)`,
+and `learning_starts=100`. The same values are used for the UR5e.
+
+**About `n_critics=2`:** with two critics, SB3's DDPG keeps two Q-networks and uses the minimum of their target
+values. That is clipped double-Q learning, one of TD3's three changes to DDPG (TD3 also delays policy updates and
+smooths the target policy). The tutorial's "DDPG" is therefore DDPG plus clipped double-Q, not textbook DDPG.
+`configs/panda_ddpg_1critic.yaml` runs pure DDPG for comparison.
 
 ## UR5e reach environment (Phase B)
 
@@ -80,6 +113,7 @@ configs/            one YAML per run
 envs/ur5e_reach.py  Phase B gymnasium env (registered as UR5eReach-v0)
 assets/             MuJoCo Menagerie UR5e + Robotiq 2F-85 (BSD licences inside; commit in MENAGERIE_COMMIT)
 train.py            --config --seed; checkpoints (model + replay buffer) every 10k steps, CSV logs
+run_all.py          parallel jobs -> evaluate -> record -> plot -> results/summary.md
 evaluate.py         100 deterministic test episodes -> results/<run>/test.json
 record.py           MP4/GIF of the trained policy
 plot.py             learning curves

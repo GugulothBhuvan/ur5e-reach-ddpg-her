@@ -12,7 +12,8 @@ import torch
 from common import ROOT, algo_class, load_config, make_env, run_dir
 from evaluate import TEST_SEED0
 
-HOLD = 6  # extra frames shown at the end of each episode
+HOLD = 8  # extra frames shown at the end of each episode
+SLOWDOWN = 3  # reaches take only 2-5 control steps, so play at 1/3 of real time
 PANDA_CAMERA = dict(render_width=480, render_height=360, render_target_position=[0.0, 0.0, 0.1],
                     render_distance=1.1, render_yaw=50, render_pitch=-25)
 
@@ -45,10 +46,10 @@ def main():
         print(f"episode {i}: success={info['is_success']}", flush=True)
     out = ROOT / "results" / "videos"
     out.mkdir(parents=True, exist_ok=True)
-    fps = env.metadata.get("render_fps") or 25
+    fps = (env.metadata.get("render_fps") or 25) / SLOWDOWN
     imageio.mimsave(out / f"{run.name}.mp4", frames, fps=fps, macro_block_size=8)
-    small = [f[::2, ::2] for f in frames[::2]]  # half resolution, every other frame: keeps the README GIF small
-    imageio.mimsave(out / f"{run.name}.gif", small, duration=2000 / fps, loop=0)
+    small = [f[::2, ::2] for f in frames]  # half resolution keeps the README GIF small
+    imageio.mimsave(out / f"{run.name}.gif", small, duration=1000 / fps, loop=0)
     print(f"{np.mean(results):.0%} success; wrote {out / run.name}.mp4/.gif ({len(frames)} frames)")
 
 

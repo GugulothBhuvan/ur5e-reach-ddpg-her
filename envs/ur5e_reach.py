@@ -33,7 +33,7 @@ KP_SCALE = 5.0
 READY_QPOS = np.array([-1.8732, -1.6993, 1.9015, -1.7730, -1.5708, -0.3024])
 
 
-CAM_POS, CAM_TARGET = np.array([1.15, 1.25, 0.85]), np.array([0.0, 0.35, 0.25])
+CAM_POS, CAM_TARGET = np.array([0.85, 1.05, 0.65]), np.array([0.0, 0.40, 0.22])
 
 
 def _look_at(pos, target):
