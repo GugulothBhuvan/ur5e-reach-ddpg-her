@@ -17,7 +17,8 @@ from common import ROOT, RUNS  # noqa: E402
 
 TUTORIAL = {"steps": [5_000, 7_000, 100_000, 1_000_000], "success": [0.70, 0.95, 0.96, 1.00]}
 TITLES = {"panda_ddpg": "PandaReach-v3, DDPG + HER", "panda_ddpg_1critic": "PandaReach-v3, pure DDPG (1 critic) + HER",
-          "ur5e_ddpg": "UR5e + 2F-85 reach, DDPG + HER", "ur5e_sac": "UR5e + 2F-85 reach, SAC + HER"}
+          "ur5e_ddpg": "UR5e + 2F-85 reach, DDPG + HER", "ur5e_sac": "UR5e + 2F-85 reach, SAC + HER",
+          "ur5e_ddpg_2cm": "UR5e + 2F-85 reach, DDPG + HER, 2 cm success"}
 
 
 def band(ax, dfs, col, label, color):

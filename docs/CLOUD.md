@@ -95,6 +95,34 @@ but the 24 vCPUs let you run about 12 jobs at once, so one session covers everyt
    ```
 4. **Stop or delete the VM** when it's done. A stopped VM has no compute charge, but its disk is still billed.
 
+## Krutrim CPU VM (cheapest way to run many seeds)
+
+A CPU VM does not make a single run faster: each run is limited by one core, at about 3 steps/s, so 30k
+steps take about 2.5-3 h and 100k about 8-9 h. What it does well is run **one job per vCPU in parallel**,
+each needing about 1 GB of RAM. For example, CPU-16x-64GB (AMD EPYC 9554, ₹49/h) runs 16 jobs at once.
+
+1. Create the VM with an Ubuntu image and SSH in.
+2. Install, with CPU-only torch:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y python3-pip python3-venv git libosmesa6 tmux
+   git clone https://github.com/GugulothBhuvan/ur5e-reach-ddpg-her && cd ur5e-reach-ddpg-her
+   python3 -m venv .venv && . .venv/bin/activate
+   pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+   pip install -r requirements.txt
+   python -m pytest -q tests
+   ```
+3. Measure the speed with a short trial run (about 10 minutes), then delete it:
+   ```bash
+   python train.py --config configs/panda_ddpg.yaml --seed 99 --steps 2000 && rm -r runs/panda_ddpg_s99
+   ```
+4. Run everything inside tmux (`tmux attach -t train` reconnects):
+   ```bash
+   tmux new -s train
+   python run_all.py --jobs ur5e_ddpg:1,2 panda_ddpg_1critic:0 ur5e_sac:0,1,2 ur5e_ddpg_2cm:0,1,2 \
+       --steps 30000 --parallel 15
+   ```
+5. Copy `results/` back with `scp -r <user>@<vm-ip>:~/ur5e-reach-ddpg-her/results .`, then **stop the VM**.
+
 ## Same thing anywhere else (AWS, Azure, the institute HPC, ...)
 
 Any Linux machine with an NVIDIA GPU works the same way as the RunPod steps:

@@ -1,0 +1,7 @@
+# Stretch 1: SAC + HER with the same settings (SAC explores through its entropy term: no action noise)
+env_id: UR5eReach-v0
+algo: sac
+total_steps: 100000
+her: {goal_selection_strategy: future, n_sampled_goal: 4}
+algo_kwargs: {gamma: 0.95, batch_size: 2048, buffer_size: 100000, learning_rate: 0.001}
+policy_kwargs: {net_arch: [512, 512, 512], n_critics: 2}
