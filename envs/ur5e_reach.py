@@ -7,6 +7,8 @@ Same interface as PandaReach-v3:
   action         3 numbers in [-1, 1] -> TCP target displacement of up to 5 cm per step, converted to
                  joint targets by damped least-squares IK (gripper held pointing down), sent to the
                  position actuators, then 20 physics steps (0.04 s) to settle (the arm covers ~3 cm)
+  control_type   "ee" (default, above) or "joints": 6 numbers in [-1, 1] -> joint-angle increments of up to
+                 0.05 rad added to the current angles (panda-gym's "joints" mode; observation unchanged)
   reward         sparse: -1 while the TCP is more than 5 cm from the goal, 0 otherwise
   episode        terminated on success, truncated at 50 steps (TimeLimit, set at registration)
 """
@@ -76,13 +78,14 @@ def build_model() -> mujoco.MjModel:
 class UR5eReachEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": 25}
 
-    def __init__(self, render_mode=None, distance_threshold=0.05, reward_type="sparse",
+    def __init__(self, render_mode=None, distance_threshold=0.05, reward_type="sparse", control_type="ee",
                  goal_center=(0.0, 0.45, 0.25), goal_range=0.3, action_scale=0.05, n_substeps=20,
                  width=480, height=360):
         self.render_mode = render_mode
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
         self.action_scale = action_scale
+        self.control_type = control_type
         self.n_substeps = n_substeps
         c, h = np.asarray(goal_center, dtype=np.float64), goal_range / 2
         self.goal_low, self.goal_high = c - h, c + h
@@ -102,7 +105,7 @@ class UR5eReachEnv(gym.Env):
         self.tcp_quat = np.empty(4)
         mujoco.mju_mat2Quat(self.tcp_quat, self.data.site_xmat[self.tcp])
 
-        self.action_space = spaces.Box(-1.0, 1.0, shape=(3,), dtype=np.float32)
+        self.action_space = spaces.Box(-1.0, 1.0, shape=(3 if control_type == "ee" else 6,), dtype=np.float32)
         box = lambda n: spaces.Box(-10.0, 10.0, shape=(n,), dtype=np.float32)
         self.observation_space = spaces.Dict(
             {"observation": box(6), "achieved_goal": box(3), "desired_goal": box(3)})
@@ -165,9 +168,13 @@ class UR5eReachEnv(gym.Env):
 
     def step(self, action):
         action = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
-        target = self.tcp_pos() + action * self.action_scale
-        target[2] = max(target[2], 0.02)  # keep the fingertips off the floor (panda-gym clips z >= 0)
-        q_target = self.ik(target, self.data.qpos[self.qadr].copy())
+        q = self.data.qpos[self.qadr].copy()
+        if self.control_type == "ee":
+            target = self.tcp_pos() + action * self.action_scale
+            target[2] = max(target[2], 0.02)  # keep the fingertips off the floor (panda-gym clips z >= 0)
+            q_target = self.ik(target, q)
+        else:
+            q_target = np.clip(q + action * 0.05, self.qlim[:, 0], self.qlim[:, 1])
         self.data.ctrl[self.arm_act] = q_target
         mujoco.mj_step(self.model, self.data, nstep=self.n_substeps)
         obs = self._obs()

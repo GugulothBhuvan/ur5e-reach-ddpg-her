@@ -84,3 +84,17 @@ def test_goals_reachable_by_ik_controller():
                 reached += 1
                 break
     assert reached / 500 >= 0.99
+
+
+def test_joint_control():
+    e = UR5eReachEnv(control_type="joints")
+    check_env(e, skip_render_check=True)
+    e.reset(seed=0)
+    q0 = e.data.qpos[e.qadr].copy()
+    a = np.zeros(6)
+    a[1] = 1.0  # shoulder lift
+    for _ in range(3):
+        e.step(a)
+    dq = e.data.qpos[e.qadr] - q0
+    assert 0.05 < dq[1] <= 0.15 + 1e-3  # up to 0.05 rad per step
+    assert np.abs(np.delete(dq, 1)).max() < 0.02
