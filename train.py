@@ -5,7 +5,7 @@ python train.py --config configs/panda_ddpg.yaml --seed 0 [--steps 30000] [--thr
 Writes to runs/<name>_s<seed>/:
   train_log.csv   every 1000 steps: rollout success / final distance over the last 100 episodes
   eval.csv        every 2500 steps: 20 deterministic episodes (fixed goals)
-  checkpoint/     model + replay buffer every 10k steps (overwritten)
+  checkpoint/     model + replay buffer every 2500 steps (overwritten)
   final_model.zip, done.json
 """
 import argparse
@@ -21,7 +21,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from common import algo_class, load_config, make_env, make_model, run_dir
 
-LOG_EVERY, EVAL_EVERY, EVAL_EPISODES, CKPT_EVERY = 1000, 2500, 20, 10_000
+LOG_EVERY, EVAL_EVERY, EVAL_EPISODES, CKPT_EVERY = 1000, 2500, 20, 2500
 
 
 def final_distance(obs):
