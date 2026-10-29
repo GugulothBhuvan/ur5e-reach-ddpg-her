@@ -28,6 +28,11 @@ def make_env(cfg, render_mode=None, **render_kwargs):
     if cfg["env_id"].startswith("Panda"):
         import panda_gym  # noqa: F401  (registers the envs)
     else:
+        # torch first: triton (shipped with CUDA torch builds) segfaults if it loads after MuJoCo's OSMesa
+        try:
+            import torch._dynamo  # noqa: F401
+        except ImportError:
+            pass
         os.environ.setdefault("MUJOCO_GL", "osmesa")  # headless rendering
         import envs  # noqa: F401
     if render_mode is not None:  # panda-gym 3 rejects render_mode=None (its default rgb_array is headless)

@@ -1,5 +1,5 @@
 # Python 3.11. CPU-only torch: pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
-# (the PyPI build also works on CPU; if you use it, `pip uninstall triton` — it segfaults next to MuJoCo's OSMesa renderer)
+# (the default PyPI/CUDA build works too; on a GPU machine use the preinstalled torch)
 torch==2.14.1
 stable-baselines3==2.9.2
 sb3-contrib==2.9.2

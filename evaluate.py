@@ -5,6 +5,7 @@ Prints and writes results/<name>_s<seed>/test.json (success rate, mean / median 
 """
 import argparse
 import json
+import shutil
 
 import numpy as np
 import torch
@@ -38,6 +39,9 @@ def main():
     out = ROOT / "results" / run.name
     out.mkdir(parents=True, exist_ok=True)
     (out / "test.json").write_text(json.dumps(res, indent=2))
+    for f in ("train_log.csv", "eval.csv", "done.json", "config.json"):  # small logs kept in git
+        if (run / f).exists():
+            shutil.copy(run / f, out / f)
     print(json.dumps(res, indent=2))
 
 
