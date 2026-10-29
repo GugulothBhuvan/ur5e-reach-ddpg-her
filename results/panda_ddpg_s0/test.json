@@ -1,0 +1,11 @@
+{
+  "run": "panda_ddpg_s0",
+  "model": "final_model_30k.zip",
+  "timesteps": 30000,
+  "episodes": 100,
+  "success_rate": 1.0,
+  "mean_final_dist_m": 0.034974476816132666,
+  "median_final_dist_m": 0.03642591834068298,
+  "max_final_dist_m": 0.049688853323459625,
+  "train_wall_s": 10528.6
+}
