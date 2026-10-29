@@ -70,7 +70,32 @@ checkpoints every 10k steps) and resumes.
    If the pod is stopped mid-run, start it again and rerun the same `run_all.py` command; it resumes from the
    last checkpoint.
 
-## Same thing anywhere else (AWS, Krutrim, Azure, the institute HPC, ...)
+## Ola Krutrim Cloud (GPU VM, billed in 15-minute steps)
+
+The smallest GPU VM is an A100 80 GB x1 with 24 vCPUs, about ₹189/h on demand (see
+[olakrutrim.com/pricing](https://www.olakrutrim.com/pricing)). That is far more GPU than these networks need,
+but the 24 vCPUs let you run about 12 jobs at once, so one session covers everything.
+
+1. In the console, create a GPU VM with an **Ubuntu image that includes the NVIDIA driver**, your SSH key and
+   about 50 GB of disk. SSH in and check that `nvidia-smi` lists the GPU.
+2. Install and run:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y python3-pip python3-venv git libosmesa6 tmux
+   git clone https://github.com/GugulothBhuvan/ur5e-reach-ddpg-her && cd ur5e-reach-ddpg-her
+   python3 -m venv .venv && . .venv/bin/activate
+   pip install torch stable-baselines3==2.9.2 sb3-contrib==2.9.2 gymnasium==1.4.0 panda-gym==3.0.7 \
+       mujoco==3.17.0 imageio imageio-ffmpeg pyyaml pandas matplotlib pytest
+   tmux new -s train     # survives SSH disconnects; reattach with: tmux attach -t train
+   python run_all.py --jobs panda_ddpg:0,1,2 ur5e_ddpg:0,1,2 --steps 100000 --parallel 12
+   ```
+   Skip `torch` in the pip line if the image already has a CUDA PyTorch.
+3. From your laptop, copy the results back:
+   ```bash
+   scp -r <user>@<vm-ip>:~/ur5e-reach-ddpg-her/results .
+   ```
+4. **Stop or delete the VM** when it's done. A stopped VM has no compute charge, but its disk is still billed.
+
+## Same thing anywhere else (AWS, Azure, the institute HPC, ...)
 
 Any Linux machine with an NVIDIA GPU works the same way as the RunPod steps:
 1. Start from an image that already has CUDA PyTorch.
