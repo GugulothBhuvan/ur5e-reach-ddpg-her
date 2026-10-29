@@ -13,23 +13,40 @@ Design notes are in [SPEC.md](SPEC.md).
 | | Steps | Test success | Mean final distance | Wall-clock |
 |---|---|---|---|---|
 | Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | ~5.8 h (~48 steps/s) |
-| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | 2.9 h per seed (1 CPU core, ~2.85 steps/s) |
-| **UR5e + 2F-85, ours** (seed 0) | 30,000 | **100 %** | 3.6 cm | 2.8 h (1 CPU core, ~2.9 steps/s) |
+| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
+| **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
 
 "Test success" means 100 deterministic episodes on goals never used in training. Both phases pass their acceptance
 bars (95 % Panda, 90 % UR5e). Both robots reach 100 % on the 20-goal checks by about 2,000-2,500 steps and stay
 there (curves below).
 
 The final distance sits just under 5 cm because an episode ends as soon as the TCP is within 5 cm, so it is not a
-precision measure; the 2 cm-threshold runs test precision. Seed 0 of each robot is being continued to 100k steps;
-those numbers and the stretch runs (pure DDPG, SAC + HER, 2 cm threshold, joint-space actions) will be added here
-when they finish.
+precision measure; the 2 cm runs below test precision.
+
+### Extra experiments (30k steps, 100 test episodes each)
+
+| Experiment | Seeds | Test success | Mean final distance | Notes |
+|---|---|---|---|---|
+| Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 % until ~13k steps, then collapsed to 40-50 % |
+| UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
+| UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | Needs ~5k steps instead of ~2.5k |
+
+**Why the tutorial's "DDPG" works and pure DDPG doesn't:** the only difference between the first row and the main
+Panda result is the second critic. With one critic, DDPG's Q-values drift upward (overestimation), the actor follows
+those errors, and the policy falls apart after reaching 100 %; the worst test episode ends 1.34 m from the goal. The
+tutorial's `n_critics=2` adds TD3's clipped double-Q target, which is what keeps training stable here. Only one
+seed was run, so this shows the effect rather than measuring it precisely.
+
+![extra experiments](results/plots/stretch_curves.png)
+
+Still running: joint-space actions (stretch 3) and seed 0 of each robot continued to 100k steps. They will be added
+here.
 
 | Panda (`PandaReach-v3`) | UR5e + 2F-85 (`UR5eReach-v0`) |
 |---|---|
 | ![panda](results/videos/panda_ddpg_s0.gif) | ![ur5e](results/videos/ur5e_ddpg_s0.gif) |
 
-Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2 s). MP4s for every seed are in [results/videos/](results/videos/). Learning curves (in-training rollout success and 20-goal deterministic evaluations; stars are the tutorial's logged points):
+Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2 s). MP4s for every run are in [results/videos/](results/videos/). Learning curves (in-training rollout success and 20-goal deterministic evaluations, mean of 3 seeds with min-max band; stars are the tutorial's logged points):
 
 ![learning curves](results/plots/learning_curves.png)
 

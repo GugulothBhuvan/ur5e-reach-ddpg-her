@@ -1,6 +1,7 @@
 """Learning curves from runs/<name>_s*/ (train_log.csv, eval.csv) -> results/plots/.
 
-python plot.py panda_ddpg ur5e_ddpg [--out learning_curves.png]
+python plot.py panda_ddpg ur5e_ddpg [--out learning_curves.png] [--xmax 30000]
+Reads runs/<name>_s*/ (this machine) or, for runs trained elsewhere, the logs copied to results/<name>_s*/.
 Each config gets one panel: rollout success (last 100 training episodes, as the tutorial logged) and
 deterministic eval success (20 fixed goals), mean over seeds with min-max band. For panda_ddpg the
 tutorial's logged rollout success is overlaid.
@@ -33,17 +34,20 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("names", nargs="+")
     p.add_argument("--out", default="learning_curves.png")
+    p.add_argument("--xmax", type=int, help="x-axis limit (env steps)")
     a = p.parse_args()
     fig, axes = plt.subplots(1, len(a.names), figsize=(6.2 * len(a.names), 4.2), squeeze=False)
     for ax, name in zip(axes[0], a.names):
-        runs = sorted(RUNS.glob(f"{name}_s[0-9]*"))
+        local = {r.name: r for r in RUNS.glob(f"{name}_s[0-9]*")}
+        copied = {r.name: r for r in (ROOT / "results").glob(f"{name}_s[0-9]*") if (r / "train_log.csv").exists()}
+        runs = [local.get(k, copied.get(k)) for k in sorted(set(local) | set(copied))]
         train = [pd.read_csv(r / "train_log.csv") for r in runs]
         evals = [pd.read_csv(r / "eval.csv") for r in runs]
         band(ax, train, "rollout_success", "rollout success (last 100 episodes)", "#2a6fdb")
         band(ax, evals, "eval_success", "deterministic eval (20 goals)", "#e07b00")
         if name.startswith("panda"):
             ax.plot(TUTORIAL["steps"], TUTORIAL["success"], "k*", ms=11, label="tutorial log (rollout, GPU run)")
-        xmax = max(d["timesteps"].max() for d in train)
+        xmax = a.xmax or max(d["timesteps"].max() for d in train)
         ax.set_xlim(0, xmax)
         ax.set_ylim(-0.02, 1.02)
         ax.axhline(0.95 if name.startswith("panda") else 0.90, color="grey", ls=":", lw=1)

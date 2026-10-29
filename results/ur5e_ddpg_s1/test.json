@@ -1,0 +1,11 @@
+{
+  "run": "ur5e_ddpg_s1",
+  "model": "final_model.zip",
+  "timesteps": 30000,
+  "episodes": 100,
+  "success_rate": 1.0,
+  "mean_final_dist_m": 0.03858148384839297,
+  "median_final_dist_m": 0.03946309722959995,
+  "max_final_dist_m": 0.04993506893515587,
+  "train_wall_s": 15472.2
+}
