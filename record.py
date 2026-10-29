@@ -47,8 +47,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     fps = env.metadata.get("render_fps") or 25
     imageio.mimsave(out / f"{run.name}.mp4", frames, fps=fps, macro_block_size=8)
-    small = [f[::2, ::2] for f in frames]  # half resolution keeps the GIF small enough for the README
-    imageio.mimsave(out / f"{run.name}.gif", small, duration=1000 / fps, loop=0)
+    small = [f[::2, ::2] for f in frames[::2]]  # half resolution, every other frame: keeps the README GIF small
+    imageio.mimsave(out / f"{run.name}.gif", small, duration=2000 / fps, loop=0)
     print(f"{np.mean(results):.0%} success; wrote {out / run.name}.mp4/.gif ({len(frames)} frames)")
 
 
