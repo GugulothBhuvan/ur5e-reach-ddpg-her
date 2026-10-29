@@ -30,6 +30,7 @@ precision measure; the 2 cm runs below test precision.
 | Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 % until ~13k steps, then collapsed to 40-50 % |
 | UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
 | UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | Needs ~5k steps instead of ~2.5k |
+| UR5e, DDPG + HER, **joint-space actions** | 1 | **100 %** | 4.0 cm | 6 joint increments of up to 0.05 rad (panda-gym's `joints` mode) instead of IK; 90 % at 2.5k steps, 100 % from ~12k |
 
 **Why the tutorial's "DDPG" works and pure DDPG doesn't:** the only difference between the first row and the main
 Panda result is the second critic. With one critic, DDPG's Q-values drift upward (overestimation), the actor follows
@@ -39,8 +40,13 @@ seed was run, so this shows the effect rather than measuring it precisely.
 
 ![extra experiments](results/plots/stretch_curves.png)
 
-Still running: joint-space actions (stretch 3) and seed 0 of each robot continued to 100k steps. They will be added
-here.
+Joint-space control (no IK in the loop: the policy moves the 6 joints directly) is the bridge to the full MTP:
+
+| UR5e, joint-space actions |
+|---|
+| ![joints](results/videos/ur5e_ddpg_joints_s0.gif) |
+
+Still running: seed 0 of each robot continued to 100k steps (flat at 100 % so far). They will be added here.
 
 | Panda (`PandaReach-v3`) | UR5e + 2F-85 (`UR5eReach-v0`) |
 |---|---|
