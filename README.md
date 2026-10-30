@@ -118,7 +118,7 @@ What each stage changed and showed:
 | C3 from the fixed start (`ur5e_c3_fixedstart`) | 100 % | | **100 %**, 3.2 cm |
 | C4 from the fixed start (`ur5e_c4_fixedstart`) | 2 % success, 98 % collisions | **77 %**, 18 % collisions | 1 % success, 51 % collisions |
 | C4 (random start) | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
-| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | SAC_RESULT |
+| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | 0 %, 33 % collisions (DDPG: 0 %, 37 %) |
 | Stretch: 3 obstacles (`ur5e_c4_multi`) | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
 | Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | MULTIFIXED_RESULT |
 

@@ -24,7 +24,10 @@ TITLES = {"panda_ddpg": "PandaReach-v3, DDPG + HER", "panda_ddpg_1critic": "Pand
           "ur5e_ddpg_joints": "UR5e + 2F-85 reach, DDPG + HER, joint-space actions",
           "ur5e_c1": "C1: Phase B task, light settings",
           "ur5e_c2_ee": "C2: random start, gripper actions", "ur5e_c2_joints": "C2: random start, joint actions",
-          "ur5e_c3": "C3: + target orientation (5 cm, 15 deg)", "ur5e_c4": "C4: + obstacle"}
+          "ur5e_c3": "C3: + target orientation (5 cm, 15 deg)", "ur5e_c4": "C4: + obstacle",
+          "ur5e_c3_fixedstart": "C3 from the fixed start", "ur5e_c4_fixedstart": "C4 from the fixed start",
+          "ur5e_c4_sac": "C4, SAC + HER", "ur5e_c4_multi": "C4, 3 obstacles",
+          "ur5e_c4_multi_fixedstart": "C4, 3 obstacles, fixed start"}
 
 
 def band(ax, dfs, col, label, color):
@@ -64,7 +67,7 @@ def main():
         xmax = a.xmax or max(d["timesteps"].max() for d in train)
         ax.set_xlim(0, xmax)
         ax.set_ylim(-0.02, 1.02)
-        bar = {"ur5e_c3": 0.80, "ur5e_c2_joints": None, "ur5e_c4": None}.get(name, 0.95 if name.startswith("panda") else 0.90)
+        bar = {"ur5e_c3": 0.80, "ur5e_c3_fixedstart": 0.80}.get(name, None if name.startswith(("ur5e_c4", "ur5e_c2_joints")) else 0.95 if name.startswith("panda") else 0.90)
         if bar:
             ax.axhline(bar, color="grey", ls=":", lw=1)
         ax.set_xlabel("environment steps")
