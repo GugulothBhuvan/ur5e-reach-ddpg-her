@@ -1,0 +1,11 @@
+{
+  "config": "panda_ddpg",
+  "controller": "scripted (straight at the goal, no learning)",
+  "episodes": 100,
+  "success_rate": 1.0,
+  "mean_final_dist_m": 0.02938499954994768,
+  "median_final_dist_m": 0.02937671449035406,
+  "max_final_dist_m": 0.0494399257004261,
+  "mean_steps": 2.64,
+  "mean_steps_successful": 2.64
+}

@@ -43,11 +43,40 @@ Train with the identical DDPG + HER settings + `TimeFeatureWrapper`; evaluate, r
 
 Stretch, in order, after the core: SAC + HER; 2 cm threshold; joint-space actions.
 
+## Phase C: harder tasks, scripted baseline vs RL
+
+A scripted controller with no learning ("move straight at the goal") gets 100 % on every Phase B setting, so
+Phase B does not show that RL is needed. Phase C makes the UR5e task harder one change at a time and reports
+the scripted rule next to RL on the same 100 test episodes (reset seeds 2,000,000+) at every stage.
+
+- Phases A and B stay as they are. New env features are constructor flags whose defaults reproduce Phase B
+  bit for bit (checked step by step against the Phase B env on all three Phase B configs).
+- Light training settings: `net_arch=[256, 256]`, `batch_size=256`, otherwise as Phase B (DDPG + HER `future`
+  x4, `n_critics=2`, gamma 0.95, sigma 0.1, lr 1e-3, buffer 100k). 30k steps, up to 100k if still rising.
+  1 seed while developing, 3 for the final number where time allows.
+- `baseline.py --config`: the scripted rule on the 100 test episodes -> `results/<name>/scripted.json`.
+  Gripper mode `clip((goal - tcp) / 0.05, -1, 1)`; joint mode: one solve of the env's IK toward a point 5 cm
+  closer, as a joint increment; from C3 it also turns toward the target orientation; from C4 it ignores the
+  obstacle.
+- Metrics: success rate, mean final distance, collision rate (C4).
+
+| Stage | Change (cumulative from C2) | Bar |
+|---|---|---|
+| C0 | scripted baseline in the repo; "Scripted" column for Phase B | reproduce 100 % / 2.7 steps etc. |
+| C1 | Phase B task, light settings | RL 100 %; report the speedup |
+| C2 | `random_start` (rejection-sampled joints: within limits, TCP >= 5 cm up, no self/floor contact), `observe_joints` (sin, cos, q / limit: +18), goal cube 0.5 m (centre raised to z = 0.30 so it clears the floor); gripper and joint mode | RL >= 90 % (gripper); joint mode reported |
+| C3 | `orientation_goal`: goal + 6D orientation (9 numbers), success = 5 cm AND 15 deg, targets within 45 deg of gripper-down; gripper action 6 numbers (5 cm, 0.1 rad), IK tracks the full pose; batched `compute_reward` | RL >= 80 % |
+| C4 | `obstacle`: one sphere (r 5-8 cm) near the start->goal midpoint (+-3 cm), clear of start pose and goal; obs + centre and radius (+4); contact ends the episode with reward -1 / (1 - gamma) = -20; success = reached and no collision; HER keeps the penalty (`info["collision"]`, `copy_info_dict=True`) | RL success > scripted success |
+
+Stretch after C4: 2-3 obstacles; SAC vs DDPG on C4; side-by-side video scripted vs RL.
+
 ## Compute (measured)
 
 Container: 4 CPUs, no GPU. With the tutorial's settings (batch 2048, 3x512 twin critics, 1 gradient step
 per env step) training runs at ~3 steps/s on 1 thread, ~5.3 on 2, ~4.7 on 4 (env stepping is ~500-1200
-steps/s, so the networks dominate). Best throughput: 4 independent 1-thread runs. Plan: Panda seeds 0-2
+steps/s, so the networks dominate). Best throughput: 4 independent 1-thread runs.
+Phase C light settings (2x256 critics, batch 256): ~46 steps/s on 1 thread vs ~2.4 for the tutorial settings
+on the same machine (~19x); 30k steps take ~11 min. Plan: Panda seeds 0-2
 and UR5e seed 0 in parallel to 30k steps (~2.8 h), then resume to 100k. Checkpoints (model + replay
 buffer) every 10k steps; runs resume from them.
 

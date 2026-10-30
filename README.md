@@ -10,13 +10,13 @@ Design notes are in [SPEC.md](SPEC.md).
 
 ## Results
 
-| | Steps | Test success | Mean final distance | Wall-clock |
-|---|---|---|---|---|
-| Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | ~5.8 h (~48 steps/s) |
-| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
-| **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
-| Panda, ours, seed 0 continued | 100,000 | **100 %** | 3.6 cm | 8.0 h (1-2 CPU cores) |
-| UR5e + 2F-85, ours, seed 0 continued | 100,000 | **100 %** | 4.2 cm | 7.9 h (1-2 CPU cores) |
+| | Steps | Test success | Mean final distance | Scripted, no learning | Wall-clock |
+|---|---|---|---|---|---|
+| Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | | ~5.8 h (~48 steps/s) |
+| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | 100 %, 2.9 cm, 2.6 steps | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
+| **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 100 %, 3.3 cm, 2.6 steps | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
+| Panda, ours, seed 0 continued | 100,000 | **100 %** | 3.6 cm | (as above) | 8.0 h (1-2 CPU cores) |
+| UR5e + 2F-85, ours, seed 0 continued | 100,000 | **100 %** | 4.2 cm | (as above) | 7.9 h (1-2 CPU cores) |
 
 "Test success" means 100 deterministic episodes on goals never used in training. Both phases pass their acceptance
 bars (95 % Panda, 90 % UR5e). Both robots reach 100 % on the 20-goal checks by about 2,000-2,500 steps and stay
@@ -25,14 +25,19 @@ there (curves below).
 The final distance sits just under 5 cm because an episode ends as soon as the TCP is within 5 cm, so it is not a
 precision measure; the 2 cm runs below test precision.
 
+"Scripted, no learning" is `baseline.py`: no training, the action is simply `clip((goal - tcp) / 0.05, -1, 1)`,
+run on the same 100 test episodes (success, mean final distance, mean steps per episode). **It also scores 100 %
+on every Phase A/B setting, so these tasks show that the RL pipeline works, not that RL is needed; Phase C below
+makes the task hard enough that the simple rule fails.**
+
 ### Extra experiments (30k steps, 100 test episodes each)
 
-| Experiment | Seeds | Test success | Mean final distance | Notes |
-|---|---|---|---|---|
-| Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 % until ~13k steps, then collapsed to 40-50 % |
-| UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
-| UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | Needs ~5k steps instead of ~2.5k |
-| UR5e, DDPG + HER, **joint-space actions** | 1 | **100 %** | 4.0 cm | 6 joint increments of up to 0.05 rad (panda-gym's `joints` mode) instead of IK; 90 % at 2.5k steps, 100 % from ~12k |
+| Experiment | Seeds | Test success | Mean final distance | Scripted, no learning | Notes |
+|---|---|---|---|---|---|
+| Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 %, 2.9 cm | 100 % until ~13k steps, then collapsed to 40-50 % |
+| UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | 100 %, 3.3 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
+| UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | 100 %, **1.3 cm**, 3.5 steps | Needs ~5k steps instead of ~2.5k |
+| UR5e, DDPG + HER, **joint-space actions** | 1 | **100 %** | 4.0 cm | 100 %, 4.3 cm, 6.7 steps (uses the env's IK) | 6 joint increments of up to 0.05 rad (panda-gym's `joints` mode) instead of IK; 90 % at 2.5k steps, 100 % from ~12k |
 
 **Why the tutorial's "DDPG" works and pure DDPG doesn't:** the only difference between the first row and the main
 Panda result is the second critic. With one critic, DDPG's Q-values drift upward (overestimation), the actor follows
@@ -73,6 +78,7 @@ python train.py --config configs/panda_ddpg.yaml --seed 0       # resumes from r
 python evaluate.py --config configs/panda_ddpg.yaml --seed 0    # 100 deterministic test episodes
 python record.py --config configs/panda_ddpg.yaml --seed 0      # results/videos/*.mp4 + .gif
 python plot.py panda_ddpg ur5e_ddpg                             # results/plots/learning_curves.png
+python baseline.py --config configs/ur5e_ddpg.yaml              # scripted rule, no learning -> results/ur5e_ddpg/scripted.json
 ```
 
 Or run the whole pipeline in one go (parallel training, tests, videos, plots, `results/summary.md`):
@@ -143,6 +149,7 @@ assets/             MuJoCo Menagerie UR5e + Robotiq 2F-85 (BSD licences inside; 
 train.py            --config --seed; checkpoints (model + replay buffer) every 10k steps, CSV logs
 run_all.py          parallel jobs -> evaluate -> record -> plot -> results/summary.md
 evaluate.py         100 deterministic test episodes -> results/<run>/test.json
+baseline.py         scripted straight-at-the-goal rule on the same 100 episodes -> results/<name>/scripted.json
 record.py           MP4/GIF of the trained policy
 plot.py             learning curves
 notebooks/          updated tutorial notebook
