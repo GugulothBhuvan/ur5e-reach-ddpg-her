@@ -4,7 +4,7 @@
 env_id: UR5eReach-v0
 env_kwargs: {random_start: true, observe_joints: true, goal_range: 0.5, goal_center: [0.0, 0.45, 0.30]}
 algo: ddpg
-total_steps: 30000
+total_steps: 100000   # 30k, extended to 100k because the curve was still rising
 action_noise_sigma: 0.1
 her: {goal_selection_strategy: future, n_sampled_goal: 4}
 algo_kwargs: {gamma: 0.95, batch_size: 256, buffer_size: 100000, learning_rate: 0.001}

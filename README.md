@@ -71,9 +71,11 @@ Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2
 The scripted rule above solves every Phase A/B task, so Phase C makes the UR5e task harder one change at a time
 and runs the scripted rule (`baseline.py`) next to RL on the same 100 test episodes at every stage. Training uses
 lighter settings (`net_arch=[256, 256]`, `batch_size=256`, everything else unchanged: DDPG + HER, `n_critics=2`,
-gamma 0.95, sigma 0.1): about **42-46 steps/s on one CPU core, ~15-19x faster** than the tutorial settings
-(2.4-2.9 steps/s), so 30k steps take ~12-15 min. All Phase C env features are constructor flags whose defaults
-reproduce Phase B exactly (checked step by step on all three Phase B configs). Stages are cumulative from C2.
+gamma 0.95, sigma 0.1): **~42 steps/s per run with 4 runs on 4 cores** (C1 `done.json`: 41.8-42.8), against
+2.85 for the Phase B runs and 2.4 for the tutorial settings measured on this machine (a short single-run probe
+gave 46 vs 2.4 steps/s): **~15-18x faster**, so 30k steps take ~12-15 min. All Phase C env features are
+constructor flags whose defaults reproduce Phase B exactly (`test_phase_b_reproduced_exactly` replays rollouts
+recorded with the original Phase B env). Stages are cumulative from C2.
 
 | Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Steps | Seeds | Wall-clock per seed |
 |---|---|---|---|---|---|---|---|
@@ -137,11 +139,9 @@ Learning curves (dashed: the scripted rule on the test episodes; dotted: the bar
 ![phase C curves](results/plots/phase_c_curves.png)
 ![phase C diagnostics](results/plots/phase_c_diagnostics.png)
 
-| C2, gripper actions: RL (77 %) | C3 from the fixed start: RL (100 %) |
-|---|---|
-| ![c2](results/videos/ur5e_c2_ee_s0.gif) | ![c3 fixed](results/videos/ur5e_c3_fixedstart_s0.gif) |
-
-C3 with random starts (RL 0 %): [results/videos/ur5e_c3_s0.gif](results/videos/ur5e_c3_s0.gif).
+| C2, gripper actions: RL (77 %) | C3, random start: RL (0 %) | C3 from the fixed start: RL (100 %) |
+|---|---|---|
+| ![c2](results/videos/ur5e_c2_ee_s0.gif) | ![c3](results/videos/ur5e_c3_s0.gif) | ![c3 fixed](results/videos/ur5e_c3_fixedstart_s0.gif) |
 
 C4, scripted straight line (left) vs RL (right), same episodes; the label turns red on a collision:
 

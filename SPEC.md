@@ -84,8 +84,8 @@ orientation goal (100 %) and to avoid obstacles, but not to go around them (deto
 Container: 4 CPUs, no GPU. With the tutorial's settings (batch 2048, 3x512 twin critics, 1 gradient step
 per env step) training runs at ~3 steps/s on 1 thread, ~5.3 on 2, ~4.7 on 4 (env stepping is ~500-1200
 steps/s, so the networks dominate). Best throughput: 4 independent 1-thread runs.
-Phase C light settings (2x256 critics, batch 256): ~46 steps/s on 1 thread vs ~2.4 for the tutorial settings
-on the same machine (~19x); 30k steps take ~11 min. Plan: Panda seeds 0-2
+Phase C light settings (2x256 critics, batch 256): ~42 steps/s per run with 4 runs on 4 cores (46 in a short
+single-run probe) vs ~2.4 for the tutorial settings on the same machine (~18x); 30k steps take ~12 min. Plan: Panda seeds 0-2
 and UR5e seed 0 in parallel to 30k steps (~2.8 h), then resume to 100k. Checkpoints (model + replay
 buffer) every 10k steps; runs resume from them.
 

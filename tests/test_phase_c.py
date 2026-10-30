@@ -267,3 +267,23 @@ def test_multi_obstacle_collision(k):
     assert hit is not None and term and not info["is_success"] and r == -20.0
     g = e.data.contact.geom[:e.data.ncon]
     assert (g == e.obstacle_geoms[k]).any() and not np.isin(g, np.delete(e.obstacle_geoms, k)).any()
+
+
+@pytest.mark.parametrize("name,kw", [("ee", {}), ("joints", {"control_type": "joints"}),
+                                     ("ee2cm", {"distance_threshold": 0.02})])
+def test_phase_b_reproduced_exactly(name, kw):
+    """Rollouts recorded with the original Phase B env (commit 64249ba): the defaults must reproduce them."""
+    from pathlib import Path
+    ref = np.load(Path(__file__).parent / "data" / "phase_b_reference.npz")
+    e = UR5eReachEnv(**kw)
+    obs_l, rew_l, acts = [], [], iter(ref[name + "_act"])
+    for ep in range(3):
+        o, _ = e.reset(seed=500 + ep)
+        obs_l.append(np.concatenate([o[k] for k in sorted(o)]))
+        for t in range(15):
+            o, r, term, _, _ = e.step(next(acts))
+            obs_l.append(np.concatenate([o[k] for k in sorted(o)]))
+            rew_l.append(r)
+            if term:
+                break
+    assert np.array_equal(np.array(obs_l), ref[name + "_obs"]) and np.array_equal(rew_l, ref[name + "_rew"])
