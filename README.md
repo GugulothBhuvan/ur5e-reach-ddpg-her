@@ -15,6 +15,8 @@ Design notes are in [SPEC.md](SPEC.md).
 | Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | ~5.8 h (~48 steps/s) |
 | **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
 | **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
+| Panda, ours, seed 0 continued | 100,000 | **100 %** | 3.6 cm | 8.0 h (1-2 CPU cores) |
+| UR5e + 2F-85, ours, seed 0 continued | 100,000 | **100 %** | 4.2 cm | 7.9 h (1-2 CPU cores) |
 
 "Test success" means 100 deterministic episodes on goals never used in training. Both phases pass their acceptance
 bars (95 % Panda, 90 % UR5e). Both robots reach 100 % on the 20-goal checks by about 2,000-2,500 steps and stay
@@ -46,7 +48,10 @@ Joint-space control (no IK in the loop: the policy moves the 6 joints directly) 
 |---|
 | ![joints](results/videos/ur5e_ddpg_joints_s0.gif) |
 
-Still running: seed 0 of each robot continued to 100k steps (flat at 100 % so far). They will be added here.
+**Plateau check (100k steps):** seed 0 of each robot was continued to 100k steps. Every one of the 39 20-goal
+evaluations from 2,500 to 100,000 steps scored 100 % on both robots, and the 100-episode test at 100k is 100 % for
+both. Training longer changes nothing on this task. (30k test results for these seeds:
+`results/*_s0/test_30k.json`; 100k: `test_100k.json`.)
 
 | Panda (`PandaReach-v3`) | UR5e + 2F-85 (`UR5eReach-v0`) |
 |---|---|
