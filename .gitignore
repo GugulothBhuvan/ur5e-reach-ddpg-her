@@ -9,3 +9,4 @@ configs/zz_*
 results/zz_*
 results/videos/zz_*
 watchdog.sh
+.claude/worktrees/
