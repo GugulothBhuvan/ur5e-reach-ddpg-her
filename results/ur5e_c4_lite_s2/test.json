@@ -1,0 +1,12 @@
+{
+  "run": "ur5e_c4_lite_s2",
+  "model": "final_model.zip",
+  "timesteps": 100000,
+  "episodes": 100,
+  "success_rate": 0.91,
+  "mean_final_dist_m": 0.047758410330861804,
+  "median_final_dist_m": 0.04249627888202667,
+  "max_final_dist_m": 0.21938855946063995,
+  "collision_rate": 0.06,
+  "train_wall_s": 2126.4
+}
