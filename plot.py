@@ -27,7 +27,8 @@ TITLES = {"panda_ddpg": "PandaReach-v3, DDPG + HER", "panda_ddpg_1critic": "Pand
           "ur5e_c3": "C3: + target orientation (5 cm, 15 deg)", "ur5e_c4": "C4: + obstacle",
           "ur5e_c3_fixedstart": "C3 from the fixed start", "ur5e_c4_fixedstart": "C4 from the fixed start",
           "ur5e_c4_sac": "C4, SAC + HER", "ur5e_c4_multi": "C4, 3 obstacles",
-          "ur5e_c4_multi_fixedstart": "C4, 3 obstacles, fixed start"}
+          "ur5e_c4_multi_fixedstart": "C4, 3 obstacles, fixed start",
+          "ur5e_c4_lite": "C4-lite: fixed start, position goal, 1 obstacle"}
 
 
 def band(ax, dfs, col, label, color):

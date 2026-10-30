@@ -77,16 +77,19 @@ gave 46 vs 2.4 steps/s): **~15-18x faster**, so 30k steps take ~12-15 min. All P
 constructor flags whose defaults reproduce Phase B exactly (`test_phase_b_reproduced_exactly` replays rollouts
 recorded with the original Phase B env). Stages are cumulative from C2.
 
-| Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Steps | Seeds | Wall-clock per seed |
+| Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Training budget | Seeds | Wall-clock per seed |
 |---|---|---|---|---|---|---|---|
-| C1: Phase B task, light settings | 100 % | **100 % / 100 % / 100 %** | 3.3 cm | | 30,000 | 3 | 12 min |
-| C2: random start, gripper actions | 69 % | **77 %** (bar 90 %: missed) | 8.6 cm | | 100,000 | 1 | 42 min |
-| C2: random start, joint actions | 7 % (37 % with position-only IK) | **1 %** | 38.8 cm | | 100,000 | 1 | 42 min |
-| C3: + target orientation (5 cm and 15 deg) | 47 % | **0 %** (bar 80 %: missed) | 68.4 cm | | 30,000 | 1 | 14 min |
-| C4: + one obstacle | 9 % | **0 %** (bar: beat scripted; missed) | 81.4 cm | 78 % / 37 % | 30,000 | 1 | 15 min |
+| C1: Phase B task, light settings | 100 % | **100 % / 100 % / 100 %** | 3.3 cm | | 30k | 3 | 12 min |
+| C2: random start, gripper actions | 69 % | **77 % / 70 % / 70 %** (mean 72 %; bar 90 %: missed) | 8.6 / 15.1 / 11.8 cm | | 100k (extended: rising at 30k) | 3 | 32-42 min |
+| C2: random start, joint actions | 7 % (37 % with position-only IK) | **1 %** | 38.8 cm | | 100k (extended: rising at 30k) | 1 | 42 min |
+| C3: + target orientation (5 cm and 15 deg) | 47 % | **34 %**, still rising at 100k (bar 80 %: missed) | 15.5 cm | | 100k (0 % and flat at 30k; rerun to match C2's budget) | 1 | 39 min |
+| C4: + one obstacle | 9 % | **0 %** (bar: beat scripted; missed) | 81.4 cm | 78 % / 37 % | **30k only** (not rerun; likely budget-limited, see C4-lite) | 1 | 15 min |
 
-Seeds: 3 for C1 (it passes its bar); 1 for every stage that misses its bar. Steps: 30k, extended to 100k only
-where the curve was still rising at 30k (both C2 runs). "Mean final distance" is the TCP-to-goal position error.
+Seeds: 3 for C1 and C2 gripper; 1 for the other stages. Budget: 30k, extended to 100k where the curve was still
+rising at 30k (both C2 runs) or rerun to 100k as a diagnostic (C3). C3 at 30k looked flat at 0 % and only started
+rising after ~70k steps, so **a flat curve at 30k does not mean a stage is unlearnable here**; C4 has only had 30k.
+"Mean final distance" is the TCP-to-goal position error. With 100 test episodes a success rate has roughly
++-5 points of sampling noise.
 
 What each stage changed and showed:
 
@@ -97,42 +100,52 @@ What each stage changed and showed:
   angle / limit: +18 numbers) and widening the goal cube to 0.5 m breaks the scripted rule: from 31 % of starts
   greedy IK gets stuck (in a check with the 0.3 m cube, 25 of the 26 failures stalled for good: the distance
   stopped changing even given 150 steps instead of 50; only 1 was a time-out). RL
-  climbs to 70-85 % by 70k steps and plateaus: **the first stage where RL beats the simple rule (77 % vs 69 %)**,
-  but short of the 90 % bar.
+  climbs to 70-80 % by 70k steps and plateaus on all 3 seeds: 77 / 70 / 70 % on the test (mean 72 %) against
+  69 % for the scripted rule. **RL roughly matches the simple rule here, at best slightly ahead**; the gap (1-8
+  points) is within test noise for two of the three seeds. Short of the 90 % bar.
 - **C2, joints** (`ur5e_c2_joints.yaml`): joint-space actions from random starts are much harder: RL reaches 10 %
   on the 20-goal checks around 80k steps, then falls back; 1 % on the test. The scripted rule (one IK solve per
   step, converted to a joint increment) does little better (7 %; 37 % if the IK ignores orientation).
 - **C3** (`ur5e_c3.yaml`): adding a target orientation (goal = position + 6D orientation, success needs 5 cm
-  and 15 deg, 6-number actions with up to 0.1 rad of rotation) on top of random starts: RL stays at 0 % with a flat
-  curve at 30k steps (so it was not extended), the scripted rule 47 %. **The orientation itself is not the
-  problem:** from the fixed Phase B start (`ur5e_c3_fixedstart.yaml`, diagnostic below) RL reaches 100 % on every
-  20-goal check from 12.5k steps and 100 % on the test. The random start is what RL cannot handle in 30k steps.
+  and 15 deg, 6-number actions with up to 0.1 rad of rotation) on top of random starts: RL was at 0 % with a
+  flat curve at 30k. Rerun to 100k (C2's budget), it stays at 0 % until ~70k steps, then rises to 10 / 30 / 40 % on
+  the 20-goal checks at 80k / 90k / 100k: **34 % on the test, still rising, below the scripted rule's 47 %**. From
+  the fixed Phase B start (`ur5e_c3_fixedstart.yaml`, 1 seed) RL reaches 100 % from 12.5k steps, which suggests
+  the orientation goal on its own is easy and the random start is what slows RL down; whether C3 would pass its
+  80 % bar with more steps is untested.
 - **C4** (`ur5e_c4.yaml`): one sphere (radius 5-8 cm) near the midpoint of the straight start->goal line;
   contact ends the episode with reward -1 / (1 - gamma) = -20, and HER keeps that penalty on relabelled samples
   (the collision flag reaches `compute_reward` through `info` with `copy_info_dict=True`; a test shows that without
   it HER silently turns the crash into reward 0). The straight-line rule collides in 78 % of episodes (9 %
-  success). RL collides less (37 %) but never reaches the goal: it does not beat the scripted rule.
+  success). At 30k steps RL collides less (37 %) but never reaches the goal, so it does not beat the scripted
+  rule. C4 was not rerun at 100k; C4-lite (below) suggests the 30k budget is a large part of the shortfall.
 
 ### Why C4 falls short, and diagnostics
 
-| Diagnostic (1 seed, 30k steps) | Scripted straight line | Hand-coded detour | RL (DDPG + HER) |
-|---|---|---|---|
-| C3 from the fixed start (`ur5e_c3_fixedstart`) | 100 % | | **100 %**, 3.2 cm |
-| C4 from the fixed start (`ur5e_c4_fixedstart`) | 2 % success, 98 % collisions | **77 %**, 18 % collisions | 1 % success, 51 % collisions |
-| C4 (random start) | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
-| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | 0 %, 33 % collisions (DDPG: 0 %, 37 %) |
-| Stretch: 3 obstacles (`ur5e_c4_multi`) | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
-| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | 2 %, 53 % collisions |
+| Diagnostic (1 seed) | Training budget | Scripted straight line | Hand-coded detour | RL (DDPG + HER) |
+|---|---|---|---|---|
+| **C4-lite**: fixed start, position-only goal, 1 obstacle (`ur5e_c4_lite`) | 100k | 1 % success, 99 % collisions | 84 %, 11 % collisions | **90 % success, 4 % collisions**, 4.5 cm |
+| C3 from the fixed start (`ur5e_c3_fixedstart`) | 30k | 100 % | | **100 %**, 3.2 cm |
+| C4 from the fixed start (`ur5e_c4_fixedstart`) | 30k | 2 % success, 98 % collisions | **77 %**, 18 % collisions | 1 % success, 51 % collisions |
+| C4 (random start) | 30k | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
+| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 30k | 9 %, 78 % collisions | | 0 %, 33 % collisions (DDPG: 0 %, 37 %) |
+| Stretch: 3 obstacles (`ur5e_c4_multi`) | 30k | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
+| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 30k | 1 %, 99 % collisions | 49 %, 37 % collisions | 2 %, 53 % collisions |
 
 The obstacle task is solvable: a hand-coded detour (`baseline.py --detour`: straight up to 15 cm above the
-sphere, across, then down; not a learned policy) reaches the goal in 77 % of the fixed-start episodes. RL learned
-to avoid the sphere (51 % collisions vs 98 %) but not to go around it; its final distance stays near 30 cm.
-**Likely reason: exploration.** With a sparse reward, the -20 crash penalty makes staying still the safest thing
-the critic has seen, and Gaussian action noise (sigma 0.1) almost never produces the coordinated up-over-down
-motion, so HER has no successful detours to relabel. Random starts add the C2/C3 difficulty on top. Likely fixes,
-not tried here because they change the method: a shaped or curriculum reward (e.g. obstacles that grow from
-radius 0), demonstrations from the detour rule in the replay buffer, or more exploration (larger noise, SAC with
-a higher entropy target), plus far more than 30k steps.
+sphere, across, then down; not a learned policy) reaches the goal in 77 % of the fixed-start C4 episodes. At 30k
+steps RL collides less than the straight line (51 % vs 98 % from the fixed start) but its final distance stays near
+30 cm, so the lower collision rate may mostly reflect moving less rather than avoiding the sphere.
+
+**C4-lite changes the picture.** With the orientation goal removed, the same method (DDPG + HER, Gaussian noise
+sigma 0.1, sparse reward with the -20 crash penalty) learns to go over the sphere from the fixed start: 90 % success
+and 4 % collisions on the test, beating both the straight line (1 %) and the hand-coded detour (84 %); the GIF below
+shows it lifting over the sphere. It needed the budget: 15 % on the 20-goal checks at 30k, 75 % at 60k, 85-95 %
+from 90k. So the earlier hypothesis that plain Gaussian exploration cannot find the detour is **not supported** in
+this setting (1 seed). The C4 shortfalls are confounded by the 30k budget and the extra orientation goal (and, for
+C4 proper, random starts); none of the 30k obstacle rows has been rerun at 100k. Untested next steps, cheapest
+first: C4 fixed start (with orientation) and C4 at 100k; then, only if those still fail, method changes such as
+demonstrations from the detour rule, a curriculum, or more exploration.
 
 Learning curves (dashed: the scripted rule on the test episodes; dotted: the bar):
 
@@ -143,16 +156,20 @@ Learning curves (dashed: the scripted rule on the test episodes; dotted: the bar
 |---|---|---|
 | ![c2](results/videos/ur5e_c2_ee_s0.gif) | ![c3](results/videos/ur5e_c3_s0.gif) | ![c3 fixed](results/videos/ur5e_c3_fixedstart_s0.gif) |
 
-C4, scripted straight line (left) vs RL (right), same episodes; the label turns red on a collision:
+C4-lite, scripted straight line (left) vs RL (right), same episodes: the straight line hits the sphere, RL goes
+over it (label red on a collision, green on reaching the goal):
 
-![c4 side by side](results/videos/ur5e_c4_fixedstart_s0_vs.gif)
+![c4-lite side by side](results/videos/ur5e_c4_lite_s0_vs.gif)
 
-Random-start C4 side by side: [results/videos/ur5e_c4_s0_vs.gif](results/videos/ur5e_c4_s0_vs.gif).
+C4 at 30k steps side by side (RL misses or collides): [fixed start](results/videos/ur5e_c4_fixedstart_s0_vs.gif),
+[random start](results/videos/ur5e_c4_s0_vs.gif).
 
-**Bottom line for the guide:** RL starts to beat the simple rule as soon as the start pose is random (C2: 77 % vs
-69 %), but with these settings and budgets it does not yet clear the bars once orientation or an obstacle is
-added on top. From a fixed start it learns the orientation goal fully (100 %) and learns to avoid obstacles, but
-not to go around them.
+**Bottom line for the guide (so far):** the clearest case for RL is C4-lite: from a fixed start, with one obstacle
+and a position goal, RL reaches 90 % with 4 % collisions where the straight-line rule crashes 99 % of the time and
+a hand-written detour gets 84 % (1 seed, 100k steps). With random starts RL only roughly matches the simple rule
+(C2: 72 % vs 69 % over 3 seeds) and is still behind it, though rising, on C3 at 100k (34 % vs 47 %). No stage after
+C1 clears its bar yet, and the 30k obstacle runs (C4 and the stretch rows) are probably budget-limited rather than
+evidence that the method cannot solve them.
 
 Run Phase C (`watchdog.py` keeps 4 runs going and restarts crashed or stalled ones; `logs/watchdog_status.md`):
 

@@ -75,9 +75,11 @@ Added during Phase C (diagnostics, same light settings, 1 seed): C3 and C4 from 
 (`baseline.py --detour`: up over the spheres, across, down) to show the obstacle task is solvable; `watchdog.py`
 (job queue, restarts crashed / stalled runs). Seeds: 3 for stages that pass their bar, 1 for stages that miss.
 
-Outcome (README "Phase C"): C1 passes (100 %, 3 seeds). RL beats the scripted rule from C2 (gripper: 77 % vs
-69 %) but misses the 90 % bar; C2 joints, C3 and C4 miss their bars. From the fixed start RL learns the
-orientation goal (100 %) and to avoid obstacles, but not to go around them (detour rule: 77 %).
+Outcome (README "Phase C"): C1 passes (100 %, 3 seeds). C2 gripper: RL 77 / 70 / 70 % (3 seeds, 100k) vs
+scripted 69 %, roughly a match, below the 90 % bar. C3 at 100k: 34 % and still rising (scripted 47 %). C2 joints
+and C4 (30k only) miss their bars. Diagnostic C4-lite (fixed start, position goal, 1 obstacle, 100k): RL 90 %
+success / 4 % collisions vs straight line 1 % / 99 % and hand-coded detour 84 % / 11 %, so the 30k obstacle results
+are likely budget-limited.
 
 ## Compute (measured)
 
