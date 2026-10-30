@@ -9,6 +9,9 @@ collision rate). The rule:
                       turned into a joint increment: clip((q_ik - q) / 0.05, -1, 1). --position-only solves
                       for position alone (a stronger variant; results/<name>/scripted_posonly.json)
   obstacles           ignored: it is the straight-line rule
+--detour (obstacle configs, gripper mode): a hand-coded detour, not a learned policy, used only to show the
+obstacle task is solvable: straight up to 15 cm above the highest sphere, across at that height to above the
+goal, then the straight-line rule (orientation handled as above throughout) -> results/<name>/scripted_detour.json
 """
 import argparse
 import json
@@ -41,15 +44,38 @@ def scripted_action(env, obs, position_only=False):
     return np.clip((env.ik(target, q, orient=not position_only) - q) / 0.05, -1, 1).astype(np.float32)
 
 
-def run_scripted(env, n, seed0, position_only=False):
+class Detour:
+    """Up over the obstacles, across, then down: the hand-coded detour (see the module docstring)."""
+    CLEAR = 0.15
+
+    def reset(self, env):
+        self.phase = 0
+        self.top = max(c[2] + r for c, r in zip(env.obstacles_pos, env.obstacles_r) if r > 0) + self.CLEAR
+
+    def __call__(self, env, obs):
+        a, p, g = scripted_action(env, obs), env.tcp_pos(), np.asarray(obs["desired_goal"][:3], dtype=np.float64)
+        if self.phase == 0:  # straight up
+            a[:3] = np.clip([0, 0, (self.top - p[2]) / 0.05], -1, 1)
+            self.phase = int(p[2] > self.top - 0.02)
+        elif self.phase == 1:  # across at that height
+            a[:3] = np.clip(np.r_[g[:2] - p[:2], self.top - p[2]] / 0.05, -1, 1)
+            self.phase = 1 + int(np.linalg.norm(g[:2] - p[:2]) < 0.03)
+        return a
+
+
+def run_scripted(env, n, seed0, position_only=False, detour=False):
     """Like train.run_episodes, for the scripted rule. Returns per-episode success, distance, steps, collision."""
     inner = env.unwrapped
+    rule = Detour() if detour else None
     succ, dist, steps, coll = [], [], [], []
     for i in range(n):
         obs, _ = env.reset(seed=seed0 + i)
+        if rule:
+            rule.reset(inner)
         done, t = False, 0
         while not done:
-            obs, _, terminated, truncated, info = env.step(scripted_action(inner, obs, position_only))
+            a = rule(inner, obs) if rule else scripted_action(inner, obs, position_only)
+            obs, _, terminated, truncated, info = env.step(a)
             done, t = terminated or truncated, t + 1
         succ.append(float(info["is_success"]))
         dist.append(float(np.linalg.norm(obs["achieved_goal"][:3] - obs["desired_goal"][:3])))
@@ -63,12 +89,13 @@ def main():
     p.add_argument("--config", required=True)
     p.add_argument("--episodes", type=int, default=100)
     p.add_argument("--position-only", action="store_true", help="joint mode: position-only IK")
+    p.add_argument("--detour", action="store_true", help="obstacle configs: hand-coded detour over the spheres")
     a = p.parse_args()
     cfg = load_config(a.config)
     env = make_env(cfg)
-    succ, dist, steps, coll = run_scripted(env, a.episodes, TEST_SEED0, a.position_only)
+    succ, dist, steps, coll = run_scripted(env, a.episodes, TEST_SEED0, a.position_only, a.detour)
     res = {"config": cfg["name"], "controller": "scripted (straight at the goal, no learning)"
-           + (", position-only IK" if a.position_only else ""),
+           + (", position-only IK" if a.position_only else "") + (", hand-coded detour over the obstacles" if a.detour else ""),
            "episodes": a.episodes, "success_rate": float(succ.mean()), "mean_final_dist_m": float(dist.mean()),
            "median_final_dist_m": float(np.median(dist)), "max_final_dist_m": float(dist.max()),
            "mean_steps": float(steps.mean()), "mean_steps_successful": float(steps[succ > 0].mean()) if succ.any() else None}
@@ -76,7 +103,8 @@ def main():
         res["collision_rate"] = float(coll.mean())
     out = ROOT / "results" / cfg["name"]
     out.mkdir(parents=True, exist_ok=True)
-    (out / ("scripted_posonly.json" if a.position_only else "scripted.json")).write_text(json.dumps(res, indent=2))
+    fname = "scripted_detour.json" if a.detour else "scripted_posonly.json" if a.position_only else "scripted.json"
+    (out / fname).write_text(json.dumps(res, indent=2))
     print(json.dumps(res, indent=2))
 
 
