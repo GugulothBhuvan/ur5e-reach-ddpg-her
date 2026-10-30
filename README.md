@@ -72,15 +72,97 @@ The scripted rule above solves every Phase A/B task, so Phase C makes the UR5e t
 and runs the scripted rule (`baseline.py`) next to RL on the same 100 test episodes at every stage. Training uses
 lighter settings (`net_arch=[256, 256]`, `batch_size=256`, everything else unchanged: DDPG + HER, `n_critics=2`,
 gamma 0.95, sigma 0.1): about **42-46 steps/s on one CPU core, ~15-19x faster** than the tutorial settings
-(2.4-2.9 steps/s), so 30k steps take ~12 min. All Phase C env features are constructor flags whose defaults
-reproduce Phase B exactly (checked step by step on all three Phase B configs).
+(2.4-2.9 steps/s), so 30k steps take ~12-15 min. All Phase C env features are constructor flags whose defaults
+reproduce Phase B exactly (checked step by step on all three Phase B configs). Stages are cumulative from C2.
 
 | Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Steps | Seeds | Wall-clock per seed |
 |---|---|---|---|---|---|---|---|
 | C1: Phase B task, light settings | 100 % | **100 % / 100 % / 100 %** | 3.3 cm | | 30,000 | 3 | 12 min |
+| C2: random start, gripper actions | 69 % | **77 %** (bar 90 %: missed) | 8.6 cm | | 100,000 | 1 | 42 min |
+| C2: random start, joint actions | 7 % (37 % with position-only IK) | **1 %** | 38.8 cm | | 100,000 | 1 | 42 min |
+| C3: + target orientation (5 cm and 15 deg) | 47 % | **0 %** (bar 80 %: missed) | 68.4 cm | | 30,000 | 1 | 14 min |
+| C4: + one obstacle | 9 % | **0 %** (bar: beat scripted; missed) | 81.4 cm | 78 % / 37 % | 30,000 | 1 | 15 min |
+
+Seeds: 3 for C1 (it passes its bar); 1 for every stage that misses its bar. Steps: 30k, extended to 100k only
+where the curve was still rising at 30k (both C2 runs). "Mean final distance" is the TCP-to-goal position error.
+
+What each stage changed and showed:
 
 - **C1** (`configs/ur5e_c1.yaml`): the light settings lose nothing on the Phase B task (100 % on all 3 seeds,
   100 % on every 20-goal check from 2.5k steps) and train ~15x faster, so they are used for the rest of Phase C.
+- **C2, gripper** (`ur5e_c2_ee.yaml`): starting from a random joint configuration (rejection-sampled within the
+  limits, TCP >= 5 cm above the floor, no self- or floor contact), observing the joint angles (sin, cos,
+  angle / limit: +18 numbers) and widening the goal cube to 0.5 m breaks the scripted rule: from 31 % of starts
+  greedy IK gets stuck (in a check with the 0.3 m cube, 25 of the 26 failures stalled for good: the distance
+  stopped changing even given 150 steps instead of 50; only 1 was a time-out). RL
+  climbs to 70-85 % by 70k steps and plateaus: **the first stage where RL beats the simple rule (77 % vs 69 %)**,
+  but short of the 90 % bar.
+- **C2, joints** (`ur5e_c2_joints.yaml`): joint-space actions from random starts are much harder: RL reaches 10 %
+  on the 20-goal checks around 80k steps, then falls back; 1 % on the test. The scripted rule (one IK solve per
+  step, converted to a joint increment) does little better (7 %; 37 % if the IK ignores orientation).
+- **C3** (`ur5e_c3.yaml`): adding a target orientation (goal = position + 6D orientation, success needs 5 cm
+  and 15 deg, 6-number actions with up to 0.1 rad of rotation) on top of random starts: RL stays at 0 % with a flat
+  curve at 30k steps (so it was not extended), the scripted rule 47 %. **The orientation itself is not the
+  problem:** from the fixed Phase B start (`ur5e_c3_fixedstart.yaml`, diagnostic below) RL reaches 100 % on every
+  20-goal check from 12.5k steps and 100 % on the test. The random start is what RL cannot handle in 30k steps.
+- **C4** (`ur5e_c4.yaml`): one sphere (radius 5-8 cm) near the midpoint of the straight start->goal line;
+  contact ends the episode with reward -1 / (1 - gamma) = -20, and HER keeps that penalty on relabelled samples
+  (the collision flag reaches `compute_reward` through `info` with `copy_info_dict=True`; a test shows that without
+  it HER silently turns the crash into reward 0). The straight-line rule collides in 78 % of episodes (9 %
+  success). RL collides less (37 %) but never reaches the goal: it does not beat the scripted rule.
+
+### Why C4 falls short, and diagnostics
+
+| Diagnostic (1 seed, 30k steps) | Scripted straight line | Hand-coded detour | RL (DDPG + HER) |
+|---|---|---|---|
+| C3 from the fixed start (`ur5e_c3_fixedstart`) | 100 % | | **100 %**, 3.2 cm |
+| C4 from the fixed start (`ur5e_c4_fixedstart`) | 2 % success, 98 % collisions | **77 %**, 18 % collisions | 1 % success, 51 % collisions |
+| C4 (random start) | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
+| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | SAC_RESULT |
+| Stretch: 3 obstacles (`ur5e_c4_multi`) | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
+| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | MULTIFIXED_RESULT |
+
+The obstacle task is solvable: a hand-coded detour (`baseline.py --detour`: straight up to 15 cm above the
+sphere, across, then down; not a learned policy) reaches the goal in 77 % of the fixed-start episodes. RL learned
+to avoid the sphere (51 % collisions vs 98 %) but not to go around it; its final distance stays near 30 cm.
+**Likely reason: exploration.** With a sparse reward, the -20 crash penalty makes staying still the safest thing
+the critic has seen, and Gaussian action noise (sigma 0.1) almost never produces the coordinated up-over-down
+motion, so HER has no successful detours to relabel. Random starts add the C2/C3 difficulty on top. Likely fixes,
+not tried here because they change the method: a shaped or curriculum reward (e.g. obstacles that grow from
+radius 0), demonstrations from the detour rule in the replay buffer, or more exploration (larger noise, SAC with
+a higher entropy target), plus far more than 30k steps.
+
+Learning curves (dashed: the scripted rule on the test episodes; dotted: the bar):
+
+![phase C curves](results/plots/phase_c_curves.png)
+![phase C diagnostics](results/plots/phase_c_diagnostics.png)
+
+| C2, gripper actions: RL (77 %) | C3 from the fixed start: RL (100 %) |
+|---|---|
+| ![c2](results/videos/ur5e_c2_ee_s0.gif) | ![c3 fixed](results/videos/ur5e_c3_fixedstart_s0.gif) |
+
+C3 with random starts (RL 0 %): [results/videos/ur5e_c3_s0.gif](results/videos/ur5e_c3_s0.gif).
+
+C4, scripted straight line (left) vs RL (right), same episodes; the label turns red on a collision:
+
+![c4 side by side](results/videos/ur5e_c4_fixedstart_s0_vs.gif)
+
+Random-start C4 side by side: [results/videos/ur5e_c4_s0_vs.gif](results/videos/ur5e_c4_s0_vs.gif).
+
+**Bottom line for the guide:** RL starts to beat the simple rule as soon as the start pose is random (C2: 77 % vs
+69 %), but with these settings and budgets it does not yet clear the bars once orientation or an obstacle is
+added on top. From a fixed start it learns the orientation goal fully (100 %) and learns to avoid obstacles, but
+not to go around them.
+
+Run Phase C (`watchdog.py` keeps 4 runs going and restarts crashed or stalled ones; `logs/watchdog_status.md`):
+
+```bash
+python baseline.py --config configs/ur5e_c4.yaml [--detour]     # scripted rule -> results/ur5e_c4/scripted*.json
+echo "ur5e_c4 0 30000" >> logs/queue.txt && python watchdog.py  # or: python train.py --config configs/ur5e_c4.yaml --seed 0
+python evaluate.py --config configs/ur5e_c4.yaml --seed 0       # adds collision_rate for obstacle configs
+python record.py --config configs/ur5e_c4.yaml --seed 0 --side-by-side
+python -m pytest tests                                          # includes tests/test_phase_c.py
+```
 
 ## Run
 
@@ -166,6 +248,7 @@ train.py            --config --seed; checkpoints (model + replay buffer) every 1
 run_all.py          parallel jobs -> evaluate -> record -> plot -> results/summary.md
 evaluate.py         100 deterministic test episodes -> results/<run>/test.json
 baseline.py         scripted straight-at-the-goal rule on the same 100 episodes -> results/<name>/scripted.json
+watchdog.py         job queue: keeps N training runs going, restarts crashed / stalled runs
 record.py           MP4/GIF of the trained policy
 plot.py             learning curves
 notebooks/          updated tutorial notebook

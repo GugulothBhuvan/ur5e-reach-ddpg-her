@@ -71,7 +71,7 @@ def main():
         ax.set_ylabel("success / collision rate" if "eval_collision" in evals[0] else "success rate")
         ax.set_title(TITLES.get(name, name))
         ax.grid(alpha=0.3)
-        ax.legend(loc="lower right", fontsize=8)
+        ax.legend(loc="best" if "eval_collision" in evals[0] else "lower right", fontsize=8)
     fig.tight_layout()
     out = ROOT / "results" / "plots"
     out.mkdir(parents=True, exist_ok=True)
