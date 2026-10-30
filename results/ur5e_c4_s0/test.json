@@ -1,12 +1,12 @@
 {
   "run": "ur5e_c4_s0",
   "model": "final_model.zip",
-  "timesteps": 30000,
+  "timesteps": 100000,
   "episodes": 100,
   "success_rate": 0.0,
-  "mean_final_dist_m": 0.8138940462470055,
-  "median_final_dist_m": 0.7923606634140015,
-  "max_final_dist_m": 1.7128208875656128,
-  "collision_rate": 0.37,
-  "train_wall_s": 895.5
+  "mean_final_dist_m": 0.7301792120933532,
+  "median_final_dist_m": 0.721062570810318,
+  "max_final_dist_m": 1.4605720043182373,
+  "collision_rate": 0.51,
+  "train_wall_s": 2411.7
 }

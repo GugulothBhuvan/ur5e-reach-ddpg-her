@@ -1,0 +1,11 @@
+{
+  "run": "ur5e_c2_ee_s2",
+  "model": "final_model.zip",
+  "timesteps": 100000,
+  "episodes": 100,
+  "success_rate": 0.7,
+  "mean_final_dist_m": 0.11762530053965747,
+  "median_final_dist_m": 0.04453306086361408,
+  "max_final_dist_m": 0.9545198678970337,
+  "train_wall_s": 1961.2
+}
