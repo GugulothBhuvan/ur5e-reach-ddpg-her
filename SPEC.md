@@ -70,6 +70,15 @@ the scripted rule next to RL on the same 100 test episodes (reset seeds 2,000,00
 
 Stretch after C4: 2-3 obstacles; SAC vs DDPG on C4; side-by-side video scripted vs RL.
 
+Added during Phase C (diagnostics, same light settings, 1 seed): C3 and C4 from the fixed Phase B start
+(`*_fixedstart`) to separate orientation / obstacle difficulty from random-start difficulty; a hand-coded detour
+(`baseline.py --detour`: up over the spheres, across, down) to show the obstacle task is solvable; `watchdog.py`
+(job queue, restarts crashed / stalled runs). Seeds: 3 for stages that pass their bar, 1 for stages that miss.
+
+Outcome (README "Phase C"): C1 passes (100 %, 3 seeds). RL beats the scripted rule from C2 (gripper: 77 % vs
+69 %) but misses the 90 % bar; C2 joints, C3 and C4 miss their bars. From the fixed start RL learns the
+orientation goal (100 %) and to avoid obstacles, but not to go around them (detour rule: 77 %).
+
 ## Compute (measured)
 
 Container: 4 CPUs, no GPU. With the tutorial's settings (batch 2048, 3x512 twin critics, 1 gradient step
