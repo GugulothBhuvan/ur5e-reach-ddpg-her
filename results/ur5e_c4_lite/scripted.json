@@ -1,0 +1,12 @@
+{
+  "config": "ur5e_c4_lite",
+  "controller": "scripted (straight at the goal, no learning)",
+  "episodes": 100,
+  "success_rate": 0.01,
+  "mean_final_dist_m": 0.237512916252017,
+  "median_final_dist_m": 0.23115437477827072,
+  "max_final_dist_m": 0.3613278865814209,
+  "mean_steps": 1.76,
+  "mean_steps_successful": 6.0,
+  "collision_rate": 0.99
+}
