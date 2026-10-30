@@ -1,0 +1,11 @@
+{
+  "config": "ur5e_c2_joints",
+  "controller": "scripted (straight at the goal, no learning), position-only IK",
+  "episodes": 100,
+  "success_rate": 0.37,
+  "mean_final_dist_m": 0.2109183070063591,
+  "median_final_dist_m": 0.16045866906642914,
+  "max_final_dist_m": 0.8582063317298889,
+  "mean_steps": 42.12,
+  "mean_steps_successful": 28.7027027027027
+}

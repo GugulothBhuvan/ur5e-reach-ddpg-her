@@ -10,13 +10,13 @@ Design notes are in [SPEC.md](SPEC.md).
 
 ## Results
 
-| | Steps | Test success | Mean final distance | Wall-clock |
-|---|---|---|---|---|
-| Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | ~5.8 h (~48 steps/s) |
-| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
-| **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
-| Panda, ours, seed 0 continued | 100,000 | **100 %** | 3.6 cm | 8.0 h (1-2 CPU cores) |
-| UR5e + 2F-85, ours, seed 0 continued | 100,000 | **100 %** | 4.2 cm | 7.9 h (1-2 CPU cores) |
+| | Steps | Test success | Mean final distance | Scripted, no learning | Wall-clock |
+|---|---|---|---|---|---|
+| Panda, original tutorial (GPU) | 1,000,000 | 96-100 % (rollout log, from ~100k steps) | not reported | | ~5.8 h (~48 steps/s) |
+| **Panda, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.5 cm | 100 %, 2.9 cm, 2.6 steps | ~2.9 h per seed (1 CPU core, ~2.85 steps/s) |
+| **UR5e + 2F-85, ours** (3 seeds) | 30,000 | **100 % / 100 % / 100 %** | 3.7 cm | 100 %, 3.3 cm, 2.6 steps | 2.8 h (seed 0); 4.2-4.3 h (seeds 1-2, on a slower shared VM) |
+| Panda, ours, seed 0 continued | 100,000 | **100 %** | 3.6 cm | (as above) | 8.0 h (1-2 CPU cores) |
+| UR5e + 2F-85, ours, seed 0 continued | 100,000 | **100 %** | 4.2 cm | (as above) | 7.9 h (1-2 CPU cores) |
 
 "Test success" means 100 deterministic episodes on goals never used in training. Both phases pass their acceptance
 bars (95 % Panda, 90 % UR5e). Both robots reach 100 % on the 20-goal checks by about 2,000-2,500 steps and stay
@@ -25,14 +25,19 @@ there (curves below).
 The final distance sits just under 5 cm because an episode ends as soon as the TCP is within 5 cm, so it is not a
 precision measure; the 2 cm runs below test precision.
 
+"Scripted, no learning" is `baseline.py`: no training, the action is simply `clip((goal - tcp) / 0.05, -1, 1)`,
+run on the same 100 test episodes (success, mean final distance, mean steps per episode). **It also scores 100 %
+on every Phase A/B setting, so these tasks show that the RL pipeline works, not that RL is needed; Phase C below
+makes the task hard enough that the simple rule fails.**
+
 ### Extra experiments (30k steps, 100 test episodes each)
 
-| Experiment | Seeds | Test success | Mean final distance | Notes |
-|---|---|---|---|---|
-| Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 % until ~13k steps, then collapsed to 40-50 % |
-| UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
-| UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | Needs ~5k steps instead of ~2.5k |
-| UR5e, DDPG + HER, **joint-space actions** | 1 | **100 %** | 4.0 cm | 6 joint increments of up to 0.05 rad (panda-gym's `joints` mode) instead of IK; 90 % at 2.5k steps, 100 % from ~12k |
+| Experiment | Seeds | Test success | Mean final distance | Scripted, no learning | Notes |
+|---|---|---|---|---|---|
+| Panda, **pure DDPG** (`n_critics=1`) | 1 | **72 %** | 13.6 cm (worst 134 cm) | 100 %, 2.9 cm | 100 % until ~13k steps, then collapsed to 40-50 % |
+| UR5e, **SAC + HER**, same settings | 3 | **100 % / 100 % / 100 %** | 3.4 cm | 100 %, 3.3 cm | Matches DDPG + HER; no action noise (SAC explores through its entropy term) |
+| UR5e, DDPG + HER, **2 cm success threshold** | 3 | **100 % / 100 % / 100 %** | **1.1 cm** (worst 2.0 cm) | 100 %, **1.3 cm**, 3.5 steps | Needs ~5k steps instead of ~2.5k |
+| UR5e, DDPG + HER, **joint-space actions** | 1 | **100 %** | 4.0 cm | 100 %, 4.3 cm, 6.7 steps (uses the env's IK) | 6 joint increments of up to 0.05 rad (panda-gym's `joints` mode) instead of IK; 90 % at 2.5k steps, 100 % from ~12k |
 
 **Why the tutorial's "DDPG" works and pure DDPG doesn't:** the only difference between the first row and the main
 Panda result is the second critic. With one critic, DDPG's Q-values drift upward (overestimation), the actor follows
@@ -61,6 +66,104 @@ Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2
 
 ![learning curves](results/plots/learning_curves.png)
 
+## Phase C: harder tasks
+
+The scripted rule above solves every Phase A/B task, so Phase C makes the UR5e task harder one change at a time
+and runs the scripted rule (`baseline.py`) next to RL on the same 100 test episodes at every stage. Training uses
+lighter settings (`net_arch=[256, 256]`, `batch_size=256`, everything else unchanged: DDPG + HER, `n_critics=2`,
+gamma 0.95, sigma 0.1): **~42 steps/s per run with 4 runs on 4 cores** (C1 `done.json`: 41.8-42.8), against
+2.85 for the Phase B runs and 2.4 for the tutorial settings measured on this machine (a short single-run probe
+gave 46 vs 2.4 steps/s): **~15-18x faster**, so 30k steps take ~12-15 min. All Phase C env features are
+constructor flags whose defaults reproduce Phase B exactly (`test_phase_b_reproduced_exactly` replays rollouts
+recorded with the original Phase B env). Stages are cumulative from C2.
+
+| Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Steps | Seeds | Wall-clock per seed |
+|---|---|---|---|---|---|---|---|
+| C1: Phase B task, light settings | 100 % | **100 % / 100 % / 100 %** | 3.3 cm | | 30,000 | 3 | 12 min |
+| C2: random start, gripper actions | 69 % | **77 %** (bar 90 %: missed) | 8.6 cm | | 100,000 | 1 | 42 min |
+| C2: random start, joint actions | 7 % (37 % with position-only IK) | **1 %** | 38.8 cm | | 100,000 | 1 | 42 min |
+| C3: + target orientation (5 cm and 15 deg) | 47 % | **0 %** (bar 80 %: missed) | 68.4 cm | | 30,000 | 1 | 14 min |
+| C4: + one obstacle | 9 % | **0 %** (bar: beat scripted; missed) | 81.4 cm | 78 % / 37 % | 30,000 | 1 | 15 min |
+
+Seeds: 3 for C1 (it passes its bar); 1 for every stage that misses its bar. Steps: 30k, extended to 100k only
+where the curve was still rising at 30k (both C2 runs). "Mean final distance" is the TCP-to-goal position error.
+
+What each stage changed and showed:
+
+- **C1** (`configs/ur5e_c1.yaml`): the light settings lose nothing on the Phase B task (100 % on all 3 seeds,
+  100 % on every 20-goal check from 2.5k steps) and train ~15x faster, so they are used for the rest of Phase C.
+- **C2, gripper** (`ur5e_c2_ee.yaml`): starting from a random joint configuration (rejection-sampled within the
+  limits, TCP >= 5 cm above the floor, no self- or floor contact), observing the joint angles (sin, cos,
+  angle / limit: +18 numbers) and widening the goal cube to 0.5 m breaks the scripted rule: from 31 % of starts
+  greedy IK gets stuck (in a check with the 0.3 m cube, 25 of the 26 failures stalled for good: the distance
+  stopped changing even given 150 steps instead of 50; only 1 was a time-out). RL
+  climbs to 70-85 % by 70k steps and plateaus: **the first stage where RL beats the simple rule (77 % vs 69 %)**,
+  but short of the 90 % bar.
+- **C2, joints** (`ur5e_c2_joints.yaml`): joint-space actions from random starts are much harder: RL reaches 10 %
+  on the 20-goal checks around 80k steps, then falls back; 1 % on the test. The scripted rule (one IK solve per
+  step, converted to a joint increment) does little better (7 %; 37 % if the IK ignores orientation).
+- **C3** (`ur5e_c3.yaml`): adding a target orientation (goal = position + 6D orientation, success needs 5 cm
+  and 15 deg, 6-number actions with up to 0.1 rad of rotation) on top of random starts: RL stays at 0 % with a flat
+  curve at 30k steps (so it was not extended), the scripted rule 47 %. **The orientation itself is not the
+  problem:** from the fixed Phase B start (`ur5e_c3_fixedstart.yaml`, diagnostic below) RL reaches 100 % on every
+  20-goal check from 12.5k steps and 100 % on the test. The random start is what RL cannot handle in 30k steps.
+- **C4** (`ur5e_c4.yaml`): one sphere (radius 5-8 cm) near the midpoint of the straight start->goal line;
+  contact ends the episode with reward -1 / (1 - gamma) = -20, and HER keeps that penalty on relabelled samples
+  (the collision flag reaches `compute_reward` through `info` with `copy_info_dict=True`; a test shows that without
+  it HER silently turns the crash into reward 0). The straight-line rule collides in 78 % of episodes (9 %
+  success). RL collides less (37 %) but never reaches the goal: it does not beat the scripted rule.
+
+### Why C4 falls short, and diagnostics
+
+| Diagnostic (1 seed, 30k steps) | Scripted straight line | Hand-coded detour | RL (DDPG + HER) |
+|---|---|---|---|
+| C3 from the fixed start (`ur5e_c3_fixedstart`) | 100 % | | **100 %**, 3.2 cm |
+| C4 from the fixed start (`ur5e_c4_fixedstart`) | 2 % success, 98 % collisions | **77 %**, 18 % collisions | 1 % success, 51 % collisions |
+| C4 (random start) | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
+| Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | 0 %, 33 % collisions (DDPG: 0 %, 37 %) |
+| Stretch: 3 obstacles (`ur5e_c4_multi`) | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
+| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | 2 %, 53 % collisions |
+
+The obstacle task is solvable: a hand-coded detour (`baseline.py --detour`: straight up to 15 cm above the
+sphere, across, then down; not a learned policy) reaches the goal in 77 % of the fixed-start episodes. RL learned
+to avoid the sphere (51 % collisions vs 98 %) but not to go around it; its final distance stays near 30 cm.
+**Likely reason: exploration.** With a sparse reward, the -20 crash penalty makes staying still the safest thing
+the critic has seen, and Gaussian action noise (sigma 0.1) almost never produces the coordinated up-over-down
+motion, so HER has no successful detours to relabel. Random starts add the C2/C3 difficulty on top. Likely fixes,
+not tried here because they change the method: a shaped or curriculum reward (e.g. obstacles that grow from
+radius 0), demonstrations from the detour rule in the replay buffer, or more exploration (larger noise, SAC with
+a higher entropy target), plus far more than 30k steps.
+
+Learning curves (dashed: the scripted rule on the test episodes; dotted: the bar):
+
+![phase C curves](results/plots/phase_c_curves.png)
+![phase C diagnostics](results/plots/phase_c_diagnostics.png)
+
+| C2, gripper actions: RL (77 %) | C3, random start: RL (0 %) | C3 from the fixed start: RL (100 %) |
+|---|---|---|
+| ![c2](results/videos/ur5e_c2_ee_s0.gif) | ![c3](results/videos/ur5e_c3_s0.gif) | ![c3 fixed](results/videos/ur5e_c3_fixedstart_s0.gif) |
+
+C4, scripted straight line (left) vs RL (right), same episodes; the label turns red on a collision:
+
+![c4 side by side](results/videos/ur5e_c4_fixedstart_s0_vs.gif)
+
+Random-start C4 side by side: [results/videos/ur5e_c4_s0_vs.gif](results/videos/ur5e_c4_s0_vs.gif).
+
+**Bottom line for the guide:** RL starts to beat the simple rule as soon as the start pose is random (C2: 77 % vs
+69 %), but with these settings and budgets it does not yet clear the bars once orientation or an obstacle is
+added on top. From a fixed start it learns the orientation goal fully (100 %) and learns to avoid obstacles, but
+not to go around them.
+
+Run Phase C (`watchdog.py` keeps 4 runs going and restarts crashed or stalled ones; `logs/watchdog_status.md`):
+
+```bash
+python baseline.py --config configs/ur5e_c4.yaml [--detour]     # scripted rule -> results/ur5e_c4/scripted*.json
+echo "ur5e_c4 0 30000" >> logs/queue.txt && python watchdog.py  # or: python train.py --config configs/ur5e_c4.yaml --seed 0
+python evaluate.py --config configs/ur5e_c4.yaml --seed 0       # adds collision_rate for obstacle configs
+python record.py --config configs/ur5e_c4.yaml --seed 0 --side-by-side
+python -m pytest tests                                          # includes tests/test_phase_c.py
+```
+
 ## Run
 
 ```bash
@@ -73,6 +176,7 @@ python train.py --config configs/panda_ddpg.yaml --seed 0       # resumes from r
 python evaluate.py --config configs/panda_ddpg.yaml --seed 0    # 100 deterministic test episodes
 python record.py --config configs/panda_ddpg.yaml --seed 0      # results/videos/*.mp4 + .gif
 python plot.py panda_ddpg ur5e_ddpg                             # results/plots/learning_curves.png
+python baseline.py --config configs/ur5e_ddpg.yaml              # scripted rule, no learning -> results/ur5e_ddpg/scripted.json
 ```
 
 Or run the whole pipeline in one go (parallel training, tests, videos, plots, `results/summary.md`):
@@ -143,6 +247,8 @@ assets/             MuJoCo Menagerie UR5e + Robotiq 2F-85 (BSD licences inside; 
 train.py            --config --seed; checkpoints (model + replay buffer) every 10k steps, CSV logs
 run_all.py          parallel jobs -> evaluate -> record -> plot -> results/summary.md
 evaluate.py         100 deterministic test episodes -> results/<run>/test.json
+baseline.py         scripted straight-at-the-goal rule on the same 100 episodes -> results/<name>/scripted.json
+watchdog.py         job queue: keeps N training runs going, restarts crashed / stalled runs
 record.py           MP4/GIF of the trained policy
 plot.py             learning curves
 notebooks/          updated tutorial notebook

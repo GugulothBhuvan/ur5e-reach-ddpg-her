@@ -1,0 +1,11 @@
+{
+  "config": "ur5e_c3",
+  "controller": "scripted (straight at the goal, no learning)",
+  "episodes": 100,
+  "success_rate": 0.47,
+  "mean_final_dist_m": 0.09904075440033921,
+  "median_final_dist_m": 0.035112543031573296,
+  "max_final_dist_m": 0.7161197066307068,
+  "mean_steps": 39.55,
+  "mean_steps_successful": 27.76595744680851
+}

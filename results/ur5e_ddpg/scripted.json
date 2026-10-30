@@ -1,0 +1,11 @@
+{
+  "config": "ur5e_ddpg",
+  "controller": "scripted (straight at the goal, no learning)",
+  "episodes": 100,
+  "success_rate": 1.0,
+  "mean_final_dist_m": 0.03245479203760624,
+  "median_final_dist_m": 0.03214384987950325,
+  "max_final_dist_m": 0.049732666462659836,
+  "mean_steps": 2.64,
+  "mean_steps_successful": 2.64
+}

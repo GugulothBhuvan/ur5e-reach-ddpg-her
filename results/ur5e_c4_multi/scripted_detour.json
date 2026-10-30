@@ -1,0 +1,12 @@
+{
+  "config": "ur5e_c4_multi",
+  "controller": "scripted (straight at the goal, no learning), hand-coded detour over the obstacles",
+  "episodes": 100,
+  "success_rate": 0.07,
+  "mean_final_dist_m": 0.6470772929672967,
+  "median_final_dist_m": 0.6459929347038269,
+  "max_final_dist_m": 1.3291536569595337,
+  "mean_steps": 20.0,
+  "mean_steps_successful": 33.0,
+  "collision_rate": 0.71
+}

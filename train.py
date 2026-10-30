@@ -25,12 +25,13 @@ LOG_EVERY, EVAL_EVERY, EVAL_EPISODES, CKPT_EVERY = 1000, 2500, 20, 2500
 
 
 def final_distance(obs):
-    return float(np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]))
+    """TCP-to-goal position distance (goals with an orientation part: position only)."""
+    return float(np.linalg.norm(obs["achieved_goal"][:3] - obs["desired_goal"][:3]))
 
 
 def run_episodes(model, env, n, seed0, deterministic=True):
-    """n episodes on fixed goals (reset seeds seed0..seed0+n-1); returns (success, final distance) arrays."""
-    succ, dist = [], []
+    """n episodes on fixed goals (reset seeds seed0..seed0+n-1); returns (success, final distance, collision)."""
+    succ, dist, coll = [], [], []
     for i in range(n):
         obs, _ = env.reset(seed=seed0 + i)
         done = False
@@ -40,7 +41,8 @@ def run_episodes(model, env, n, seed0, deterministic=True):
             done = terminated or truncated
         succ.append(float(info["is_success"]))
         dist.append(final_distance(obs))
-    return np.array(succ), np.array(dist)
+        coll.append(float(info.get("collision", False)))
+    return np.array(succ), np.array(dist), np.array(coll)
 
 
 class Csv:
@@ -65,12 +67,16 @@ class Logger(BaseCallback):
     def __init__(self, out, eval_env, wall0, episodes0, keep_upto):
         super().__init__()
         self.out, self.eval_env, self.wall0 = out, eval_env, wall0
-        self.succ, self.dist = deque(maxlen=100), deque(maxlen=100)
+        self.succ, self.dist, self.coll = deque(maxlen=100), deque(maxlen=100), deque(maxlen=100)
         self.episodes = episodes0
         self.t0 = time.time()
+        self.obstacle = getattr(eval_env.unwrapped, "obstacle", False)  # Phase C4: also log collision rates
+        extra = ["rollout_collision"] if self.obstacle else []
         self.train_csv = Csv(out / "train_log.csv", ["timesteps", "wall_s", "episodes", "rollout_success",
-                                                     "rollout_final_dist"], keep_upto)
-        self.eval_csv = Csv(out / "eval.csv", ["timesteps", "wall_s", "eval_success", "eval_final_dist"], keep_upto)
+                                                     "rollout_final_dist"] + extra, keep_upto)
+        extra = ["eval_collision"] if self.obstacle else []
+        self.eval_csv = Csv(out / "eval.csv", ["timesteps", "wall_s", "eval_success", "eval_final_dist"] + extra,
+                            keep_upto)
 
     def wall(self):
         return self.wall0 + time.time() - self.t0
@@ -81,16 +87,23 @@ class Logger(BaseCallback):
                 self.episodes += 1
                 self.succ.append(float(info["is_success"]))
                 self.dist.append(final_distance(info["terminal_observation"]))
+                self.coll.append(float(info.get("collision", False)))
         t = self.num_timesteps
         if t % LOG_EVERY == 0 and self.succ:
-            self.train_csv.write({"timesteps": t, "wall_s": round(self.wall(), 1), "episodes": self.episodes,
-                                  "rollout_success": np.mean(self.succ), "rollout_final_dist": np.mean(self.dist)})
+            row = {"timesteps": t, "wall_s": round(self.wall(), 1), "episodes": self.episodes,
+                   "rollout_success": np.mean(self.succ), "rollout_final_dist": np.mean(self.dist)}
+            if self.obstacle:
+                row["rollout_collision"] = np.mean(self.coll)
+            self.train_csv.write(row)
         if t % EVAL_EVERY == 0:
-            s, d = run_episodes(self.model, self.eval_env, EVAL_EPISODES, seed0=1_000_000)
-            self.eval_csv.write({"timesteps": t, "wall_s": round(self.wall(), 1), "eval_success": s.mean(),
-                                 "eval_final_dist": d.mean()})
+            s, d, c = run_episodes(self.model, self.eval_env, EVAL_EPISODES, seed0=1_000_000)
+            row = {"timesteps": t, "wall_s": round(self.wall(), 1), "eval_success": s.mean(), "eval_final_dist": d.mean()}
+            if self.obstacle:
+                row["eval_collision"] = c.mean()
+            self.eval_csv.write(row)
             print(f"{t:>7} steps  {self.wall() / 60:6.1f} min  rollout {np.mean(self.succ):.2f}  "
-                  f"eval {s.mean():.2f}  dist {d.mean() * 100:.1f} cm", flush=True)
+                  f"eval {s.mean():.2f}  dist {d.mean() * 100:.1f} cm" + (f"  coll {c.mean():.2f}" if self.obstacle else ""),
+                  flush=True)
         if t % CKPT_EVERY == 0:
             tmp = self.out / "checkpoint.tmp"
             shutil.rmtree(tmp, ignore_errors=True)

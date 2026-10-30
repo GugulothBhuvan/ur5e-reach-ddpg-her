@@ -1,0 +1,9 @@
+# Phase C1: the Phase B task (gripper actions, 5 cm) with the light training settings
+# (net_arch [256, 256], batch 256; everything else as Phase B)
+env_id: UR5eReach-v0
+algo: ddpg
+total_steps: 30000
+action_noise_sigma: 0.1
+her: {goal_selection_strategy: future, n_sampled_goal: 4}
+algo_kwargs: {gamma: 0.95, batch_size: 256, buffer_size: 100000, learning_rate: 0.001}
+policy_kwargs: {net_arch: [256, 256], n_critics: 2}

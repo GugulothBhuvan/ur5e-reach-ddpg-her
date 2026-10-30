@@ -1,0 +1,44 @@
+{
+  "env_id": "UR5eReach-v0",
+  "env_kwargs": {
+    "observe_joints": true,
+    "goal_range": 0.5,
+    "goal_center": [
+      0.0,
+      0.45,
+      0.3
+    ],
+    "orientation_goal": true,
+    "angle_threshold_deg": 15.0,
+    "goal_max_tilt_deg": 45.0,
+    "obstacle": true,
+    "obstacle_radius": [
+      0.05,
+      0.08
+    ],
+    "obstacle_offset": 0.03,
+    "collision_penalty": 20.0
+  },
+  "algo": "ddpg",
+  "total_steps": 30000,
+  "action_noise_sigma": 0.1,
+  "her": {
+    "goal_selection_strategy": "future",
+    "n_sampled_goal": 4,
+    "copy_info_dict": true
+  },
+  "algo_kwargs": {
+    "gamma": 0.95,
+    "batch_size": 256,
+    "buffer_size": 100000,
+    "learning_rate": 0.001
+  },
+  "policy_kwargs": {
+    "net_arch": [
+      256,
+      256
+    ],
+    "n_critics": 2
+  },
+  "name": "ur5e_c4_fixedstart"
+}

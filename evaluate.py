@@ -29,10 +29,12 @@ def main():
     run = run_dir(cfg, a.seed)
     env = make_env(cfg)
     model = algo_class(cfg).load(run / a.model, env=env)
-    succ, dist = run_episodes(model, env, a.episodes, seed0=TEST_SEED0)
+    succ, dist, coll = run_episodes(model, env, a.episodes, seed0=TEST_SEED0)
     res = {"run": run.name, "model": a.model, "timesteps": int(model.num_timesteps), "episodes": a.episodes,
            "success_rate": float(succ.mean()), "mean_final_dist_m": float(dist.mean()),
            "median_final_dist_m": float(np.median(dist)), "max_final_dist_m": float(dist.max())}
+    if getattr(env.unwrapped, "obstacle", False):
+        res["collision_rate"] = float(coll.mean())
     done = run / "done.json"
     if done.exists():
         res["train_wall_s"] = json.loads(done.read_text())["wall_s"]
