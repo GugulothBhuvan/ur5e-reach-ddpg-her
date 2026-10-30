@@ -7,6 +7,7 @@ deterministic eval success (20 fixed goals), mean over seeds with min-max band. 
 tutorial's logged rollout success is overlaid.
 """
 import argparse
+import json
 
 import matplotlib
 import pandas as pd
@@ -20,7 +21,10 @@ TUTORIAL = {"steps": [5_000, 7_000, 100_000, 1_000_000], "success": [0.70, 0.95,
 TITLES = {"panda_ddpg": "PandaReach-v3, DDPG + HER", "panda_ddpg_1critic": "PandaReach-v3, pure DDPG (1 critic) + HER",
           "ur5e_ddpg": "UR5e + 2F-85 reach, DDPG + HER", "ur5e_sac": "UR5e + 2F-85 reach, SAC + HER",
           "ur5e_ddpg_2cm": "UR5e + 2F-85 reach, DDPG + HER, 2 cm success",
-          "ur5e_ddpg_joints": "UR5e + 2F-85 reach, DDPG + HER, joint-space actions"}
+          "ur5e_ddpg_joints": "UR5e + 2F-85 reach, DDPG + HER, joint-space actions",
+          "ur5e_c1": "C1: Phase B task, light settings",
+          "ur5e_c2_ee": "C2: random start, gripper actions", "ur5e_c2_joints": "C2: random start, joint actions",
+          "ur5e_c3": "C3: + target orientation (5 cm, 15 deg)", "ur5e_c4": "C4: + obstacle"}
 
 
 def band(ax, dfs, col, label, color):
@@ -45,14 +49,26 @@ def main():
         evals = [pd.read_csv(r / "eval.csv") for r in runs]
         band(ax, train, "rollout_success", "rollout success (last 100 episodes)", "#2a6fdb")
         band(ax, evals, "eval_success", "deterministic eval (20 goals)", "#e07b00")
+        if "eval_collision" in evals[0]:
+            band(ax, evals, "eval_collision", "eval collision rate", "#c0392b")
+        scripted = ROOT / "results" / name / "scripted.json"
+        if name.startswith("ur5e_c") and scripted.exists():  # Phase C: the no-learning rule for reference
+            sj = json.loads(scripted.read_text())
+            ax.axhline(sj["success_rate"], color="k", ls="--", lw=1.2,
+                       label=f"scripted, no learning ({sj['success_rate']:.0%} success)")
+            if "collision_rate" in sj:
+                ax.axhline(sj["collision_rate"], color="#c0392b", ls="--", lw=1,
+                           label=f"scripted collisions ({sj['collision_rate']:.0%})")
         if name.startswith("panda"):
             ax.plot(TUTORIAL["steps"], TUTORIAL["success"], "k*", ms=11, label="tutorial log (rollout, GPU run)")
         xmax = a.xmax or max(d["timesteps"].max() for d in train)
         ax.set_xlim(0, xmax)
         ax.set_ylim(-0.02, 1.02)
-        ax.axhline(0.95 if name.startswith("panda") else 0.90, color="grey", ls=":", lw=1)
+        bar = {"ur5e_c3": 0.80, "ur5e_c2_joints": None, "ur5e_c4": None}.get(name, 0.95 if name.startswith("panda") else 0.90)
+        if bar:
+            ax.axhline(bar, color="grey", ls=":", lw=1)
         ax.set_xlabel("environment steps")
-        ax.set_ylabel("success rate")
+        ax.set_ylabel("success / collision rate" if "eval_collision" in evals[0] else "success rate")
         ax.set_title(TITLES.get(name, name))
         ax.grid(alpha=0.3)
         ax.legend(loc="lower right", fontsize=8)

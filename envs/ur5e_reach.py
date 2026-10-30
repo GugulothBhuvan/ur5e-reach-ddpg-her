@@ -71,6 +71,7 @@ def collision_flags(info, shape):
 
 
 CAM_POS, CAM_TARGET = np.array([0.85, 1.05, 0.65]), np.array([0.0, 0.40, 0.22])
+WIDE_POS, WIDE_TARGET = np.array([1.45, 1.55, 1.15]), np.array([0.0, 0.15, 0.35])  # Phase C: random starts
 
 
 def _look_at(pos, target):
@@ -83,7 +84,7 @@ def _look_at(pos, target):
 OBSTACLE_PARK = np.array([0.0, -1.5, -1.0])  # where the obstacle body sits while no obstacle is placed
 
 
-def build_model(orientation_goal=False, obstacle=False) -> mujoco.MjModel:
+def build_model(orientation_goal=False, obstacle=False, wide_camera=False) -> mujoco.MjModel:
     """Menagerie UR5e with the 2F-85 on its flange, a floor, a camera and a visual-only goal sphere.
 
     orientation_goal adds a visual-only pointer on the goal showing the target gripper axis; obstacle adds a
@@ -106,6 +107,8 @@ def build_model(orientation_goal=False, obstacle=False) -> mujoco.MjModel:
     wb.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[2, 2, 0.05], material="grid")
     wb.add_light(pos=[0.5, -0.5, 2.0], dir=[-0.2, 0.2, -1.0], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, diffuse=[0.6, 0.6, 0.6])
     wb.add_camera(name="side", pos=CAM_POS, xyaxes=_look_at(CAM_POS, CAM_TARGET))
+    if wide_camera:
+        wb.add_camera(name="wide", pos=WIDE_POS, xyaxes=_look_at(WIDE_POS, WIDE_TARGET))
     goal = wb.add_body(name="goal", mocap=True, pos=[0.0, 0.45, 0.25])
     goal.add_geom(type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.02, 0, 0], rgba=[0.1, 0.8, 0.2, 0.45],
                   contype=0, conaffinity=0)
@@ -148,7 +151,8 @@ class UR5eReachEnv(gym.Env):
         self.obstacle_radius, self.obstacle_offset = obstacle_radius, obstacle_offset
         self.collision_penalty = collision_penalty
 
-        self.model = build_model(orientation_goal, obstacle)
+        self.camera = "wide" if random_start else "side"
+        self.model = build_model(orientation_goal, obstacle, wide_camera=random_start)
         self.data = mujoco.MjData(self.model)
         self._ik_data = mujoco.MjData(self.model)  # scratch copy for IK iterations
         m = self.model
@@ -397,7 +401,7 @@ class UR5eReachEnv(gym.Env):
     def render(self):
         if self._renderer is None:
             self._renderer = mujoco.Renderer(self.model, self.height, self.width)
-        self._renderer.update_scene(self.data, camera="side")
+        self._renderer.update_scene(self.data, camera=self.camera)
         return self._renderer.render()
 
     def close(self):
