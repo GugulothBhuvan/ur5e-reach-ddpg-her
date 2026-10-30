@@ -66,6 +66,22 @@ Videos play at 1/3 real speed: each reach takes only 2-5 control steps (0.08-0.2
 
 ![learning curves](results/plots/learning_curves.png)
 
+## Phase C: harder tasks
+
+The scripted rule above solves every Phase A/B task, so Phase C makes the UR5e task harder one change at a time
+and runs the scripted rule (`baseline.py`) next to RL on the same 100 test episodes at every stage. Training uses
+lighter settings (`net_arch=[256, 256]`, `batch_size=256`, everything else unchanged: DDPG + HER, `n_critics=2`,
+gamma 0.95, sigma 0.1): about **42-46 steps/s on one CPU core, ~15-19x faster** than the tutorial settings
+(2.4-2.9 steps/s), so 30k steps take ~12 min. All Phase C env features are constructor flags whose defaults
+reproduce Phase B exactly (checked step by step on all three Phase B configs).
+
+| Stage | Scripted success | RL success | RL mean final distance | Collisions (scripted / RL) | Steps | Seeds | Wall-clock per seed |
+|---|---|---|---|---|---|---|---|
+| C1: Phase B task, light settings | 100 % | **100 % / 100 % / 100 %** | 3.3 cm | | 30,000 | 3 | 12 min |
+
+- **C1** (`configs/ur5e_c1.yaml`): the light settings lose nothing on the Phase B task (100 % on all 3 seeds,
+  100 % on every 20-goal check from 2.5k steps) and train ~15x faster, so they are used for the rest of Phase C.
+
 ## Run
 
 ```bash
