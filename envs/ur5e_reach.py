@@ -165,8 +165,8 @@ class UR5eReachEnv(gym.Env):
         self.n_obstacles, self.obstacle_spread = (n_obstacles if obstacle else 0), obstacle_spread
         self.collision_penalty = collision_penalty
 
-        self.camera = "wide" if random_start else "side"
-        self.model = build_model(orientation_goal, obstacle, wide_camera=random_start, n_obstacles=n_obstacles)
+        self.camera = "wide" if random_start or obstacle else "side"
+        self.model = build_model(orientation_goal, obstacle, wide_camera=random_start or obstacle, n_obstacles=n_obstacles)
         self.data = mujoco.MjData(self.model)
         self._ik_data = mujoco.MjData(self.model)  # scratch copy for IK iterations
         m = self.model

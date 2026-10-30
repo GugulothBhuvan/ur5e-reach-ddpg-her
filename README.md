@@ -120,7 +120,7 @@ What each stage changed and showed:
 | C4 (random start) | 9 %, 78 % collisions | 16 %, 61 % collisions | 0 %, 37 % collisions |
 | Stretch: SAC + HER on C4 (`ur5e_c4_sac`) | 9 %, 78 % collisions | | 0 %, 33 % collisions (DDPG: 0 %, 37 %) |
 | Stretch: 3 obstacles (`ur5e_c4_multi`) | 3 %, 97 % collisions | 7 %, 71 % collisions | 0 %, 72 % collisions |
-| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | MULTIFIXED_RESULT |
+| Stretch: 3 obstacles, fixed start (`ur5e_c4_multi_fixedstart`) | 1 %, 99 % collisions | 49 %, 37 % collisions | 2 %, 53 % collisions |
 
 The obstacle task is solvable: a hand-coded detour (`baseline.py --detour`: straight up to 15 cm above the
 sphere, across, then down; not a learned policy) reaches the goal in 77 % of the fixed-start episodes. RL learned

@@ -37,7 +37,9 @@ def label(frame, text, color):
         font = ImageFont.load_default(size=20)
     except TypeError:  # Pillow < 10.1
         font = ImageFont.load_default()
-    ImageDraw.Draw(img).text((10, 8), text, fill=color, font=font)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle(draw.textbbox((10, 8), text, font=font), fill=(240, 240, 240))  # readable on the black sky
+    draw.text((10, 8), text, fill=color, font=font)
     return np.asarray(img)
 
 
