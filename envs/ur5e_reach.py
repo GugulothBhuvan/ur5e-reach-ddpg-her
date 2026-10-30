@@ -27,6 +27,12 @@ Phase C options (all off by default, which reproduces Phase B exactly):
                     (-1 / (1 - gamma) = -20 at gamma 0.95) and counts as failure. The flag is returned as
                     info["collision"] and compute_reward reads it, so HER relabelling keeps the penalty
                     (use HerReplayBuffer(copy_info_dict=True))
+  n_obstacles       with obstacle: number of spheres (default 1). Sphere 0 is placed as above; the others near
+                    the points at 0.3 and 0.7 of the start-TCP -> goal line, same radius range and clearances, not
+                    overlapping each other. Their per-axis offset starts at obstacle_offset and widens over the
+                    retries to obstacle_spread, so they sit on the line when it is long enough and beside sphere 0
+                    when not (e.g. from the fixed start). `observation` gains 4 numbers per sphere; touching any
+                    sphere is a collision
 """
 from pathlib import Path
 
@@ -81,14 +87,19 @@ def _look_at(pos, target):
     return np.concatenate([x, np.cross(x, fwd)]).tolist()
 
 
-OBSTACLE_PARK = np.array([0.0, -1.5, -1.0])  # where the obstacle body sits while no obstacle is placed
+OBSTACLE_PARK = np.array([0.0, -1.5, -1.0])  # where the obstacle bodies sit while no obstacle is placed
+EXTRA_FRACTIONS = (0.3, 0.7)  # line positions (start -> goal) of obstacles 1, 2; obstacle 0 is at the midpoint
 
 
-def build_model(orientation_goal=False, obstacle=False, wide_camera=False) -> mujoco.MjModel:
+def obstacle_name(i):
+    return "obstacle" if i == 0 else f"obstacle{i}"
+
+
+def build_model(orientation_goal=False, obstacle=False, wide_camera=False, n_obstacles=1) -> mujoco.MjModel:
     """Menagerie UR5e with the 2F-85 on its flange, a floor, a camera and a visual-only goal sphere.
 
-    orientation_goal adds a visual-only pointer on the goal showing the target gripper axis; obstacle adds a
-    collidable sphere on a mocap body (its radius is set per episode)."""
+    orientation_goal adds a visual-only pointer on the goal showing the target gripper axis; obstacle adds
+    n_obstacles collidable spheres, each on its own mocap body (radii are set per episode)."""
     spec = mujoco.MjSpec.from_file(str(ASSETS / "universal_robots_ur5e" / "ur5e.xml"))
     gripper = mujoco.MjSpec.from_file(str(ASSETS / "robotiq_2f85" / "2f85.xml"))
     # TCP: the point between the fingertips (the 2F-85's own "pinch" site sits there too)
@@ -115,9 +126,9 @@ def build_model(orientation_goal=False, obstacle=False, wide_camera=False) -> mu
     if orientation_goal:  # target gripper z-axis (approach direction), drawn from the goal up the gripper
         goal.add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[0.006, 0.05, 0], pos=[0, 0, -0.05],
                       rgba=[0.1, 0.8, 0.2, 0.6], contype=0, conaffinity=0)
-    if obstacle:
-        obs_body = wb.add_body(name="obstacle", mocap=True, pos=OBSTACLE_PARK)
-        obs_body.add_geom(name="obstacle", type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.05, 0, 0],
+    for i in range(n_obstacles if obstacle else 0):
+        obs_body = wb.add_body(name=obstacle_name(i), mocap=True, pos=OBSTACLE_PARK)
+        obs_body.add_geom(name=obstacle_name(i), type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.05, 0, 0],
                           rgba=[0.85, 0.2, 0.15, 0.7], contype=1, conaffinity=1)
     spec.visual.global_.offwidth = 1280
     spec.visual.global_.offheight = 960
@@ -135,7 +146,8 @@ class UR5eReachEnv(gym.Env):
                  goal_center=(0.0, 0.45, 0.25), goal_range=0.3, action_scale=0.05, n_substeps=20,
                  width=480, height=360, random_start=False, observe_joints=False, orientation_goal=False,
                  angle_threshold_deg=15.0, goal_max_tilt_deg=45.0, rot_scale=0.1, obstacle=False,
-                 obstacle_radius=(0.05, 0.08), obstacle_offset=0.03, collision_penalty=20.0):
+                 obstacle_radius=(0.05, 0.08), obstacle_offset=0.03, collision_penalty=20.0, n_obstacles=1,
+                 obstacle_spread=0.15):
         self.render_mode = render_mode
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
@@ -149,10 +161,12 @@ class UR5eReachEnv(gym.Env):
         self.angle_threshold = np.deg2rad(angle_threshold_deg)
         self.goal_max_tilt, self.rot_scale = np.deg2rad(goal_max_tilt_deg), rot_scale
         self.obstacle_radius, self.obstacle_offset = obstacle_radius, obstacle_offset
+        assert 1 <= n_obstacles <= 1 + len(EXTRA_FRACTIONS)
+        self.n_obstacles, self.obstacle_spread = (n_obstacles if obstacle else 0), obstacle_spread
         self.collision_penalty = collision_penalty
 
         self.camera = "wide" if random_start else "side"
-        self.model = build_model(orientation_goal, obstacle, wide_camera=random_start)
+        self.model = build_model(orientation_goal, obstacle, wide_camera=random_start, n_obstacles=n_obstacles)
         self.data = mujoco.MjData(self.model)
         self._ik_data = mujoco.MjData(self.model)  # scratch copy for IK iterations
         m = self.model
@@ -168,23 +182,35 @@ class UR5eReachEnv(gym.Env):
         mujoco.mju_mat2Quat(self.tcp_quat, self.data.site_xmat[self.tcp])
         self.robot_geoms = np.array([g for g in range(m.ngeom) if m.geom_bodyid[g] > 0
                                      and m.geom_contype[g] | m.geom_conaffinity[g]
-                                     and m.body(m.geom_bodyid[g]).name not in ("goal", "obstacle")])
+                                     and m.body(m.geom_bodyid[g]).name != "goal"
+                                     and not m.body(m.geom_bodyid[g]).name.startswith("obstacle")])
         if obstacle:
-            self.obstacle_geom = m.geom("obstacle").id
-            self.obstacle_mocap = m.body_mocapid[m.body("obstacle").id]
-            self.obstacle_pos, self.obstacle_r = OBSTACLE_PARK.copy(), 0.0
+            names = [obstacle_name(i) for i in range(self.n_obstacles)]
+            self.obstacle_geoms = np.array([m.geom(n).id for n in names])
+            self.obstacle_mocaps = [m.body_mocapid[m.body(n).id] for n in names]
+            self.obstacle_geom = self.obstacle_geoms[0]
+            self.obstacles_pos = [OBSTACLE_PARK.copy() for _ in names]  # centre and radius of each sphere
+            self.obstacles_r = [0.0] * self.n_obstacles
 
         n_act = 6 if control_type != "ee" or orientation_goal else 3
         self.action_space = spaces.Box(-1.0, 1.0, shape=(n_act,), dtype=np.float32)
         box = lambda n: spaces.Box(-10.0, 10.0, shape=(n,), dtype=np.float32)
         n_goal = 9 if orientation_goal else 3
-        n_obs = 6 + 18 * observe_joints + 4 * obstacle
+        n_obs = 6 + 18 * observe_joints + 4 * self.n_obstacles
         self.observation_space = spaces.Dict(
             {"observation": box(n_obs), "achieved_goal": box(n_goal), "desired_goal": box(n_goal)})
         self.goal = np.zeros(n_goal)
         self.goal_quat = self.tcp_quat.copy()
         self._renderer = None
         self.width, self.height = width, height
+
+    @property
+    def obstacle_pos(self):  # sphere 0
+        return self.obstacles_pos[0]
+
+    @property
+    def obstacle_r(self):
+        return self.obstacles_r[0]
 
     # ---------------------------------------------------------------- kinematics
     def _set_qpos(self, d, q):
@@ -246,8 +272,8 @@ class UR5eReachEnv(gym.Env):
         if self.observe_joints:
             q = self.data.qpos[self.qadr]
             parts += [np.sin(q), np.cos(q), q / self.qlim[:, 1]]  # limits are symmetric
-        if self.obstacle:
-            parts += [self.obstacle_pos, [self.obstacle_r]]
+        for c, r in zip(self.obstacles_pos, self.obstacles_r) if self.obstacle else ():
+            parts += [c, [r]]
         return {"observation": np.concatenate(parts).astype(np.float32),
                 "achieved_goal": self.achieved_goal().astype(np.float32),
                 "desired_goal": self.goal.astype(np.float32)}
@@ -266,13 +292,13 @@ class UR5eReachEnv(gym.Env):
         if d.ncon == 0:
             return False
         g = d.contact.geom[:d.ncon]
-        hit = (g == self.obstacle_geom).any(axis=1) & np.isin(g, self.robot_geoms).any(axis=1)
+        hit = np.isin(g, self.obstacle_geoms).any(axis=1) & np.isin(g, self.robot_geoms).any(axis=1)
         return bool(hit.any())
 
     def sample_start(self, max_tries=10_000):
         """Rejection-sample arm joints within limits: TCP >= 5 cm above the floor, no robot contact."""
         d, m = self._ik_data, self.model
-        exclude = (self.obstacle_geom,) if self.obstacle else ()
+        exclude = tuple(self.obstacle_geoms) if self.obstacle else ()
         for _ in range(max_tries):
             q = self.np_random.uniform(self.qlim[:, 0], self.qlim[:, 1])
             d.qpos[:] = 0
@@ -292,7 +318,8 @@ class UR5eReachEnv(gym.Env):
         return q
 
     def _place_obstacle(self, start, goal_pos, tries=20):
-        """Sphere near the start -> goal midpoint, clear of the start TCP, the goal and the start arm pose."""
+        """Sphere 0 near the start -> goal midpoint, clear of the start TCP, the goal and the start arm pose;
+        then the others near their line points (see the module docstring)."""
         lo, hi = self.obstacle_radius
         for _ in range(tries):
             r = self.np_random.uniform(lo, hi)
@@ -302,22 +329,47 @@ class UR5eReachEnv(gym.Env):
             self._set_obstacle(c, r)
             mujoco.mj_forward(self.model, self.data)
             if not self._touches_obstacle(self.data):
+                break
+        else:
+            self._set_obstacle(OBSTACLE_PARK, 0.0)
+            return False
+        for i, f in zip(range(1, self.n_obstacles), EXTRA_FRACTIONS):
+            if not self._place_extra(i, start + f * (goal_pos - start), start, goal_pos):
+                for j in range(self.n_obstacles):
+                    self._set_obstacle(OBSTACLE_PARK, 0.0, j)
+                return False
+        return True
+
+    def _place_extra(self, i, p, start, goal_pos, tries=50):
+        """Sphere i near line point p, its offset widening from obstacle_offset to obstacle_spread."""
+        lo, hi = self.obstacle_radius
+        for k in range(tries):
+            off = self.obstacle_offset + (self.obstacle_spread - self.obstacle_offset) * k / (tries - 1)
+            r = self.np_random.uniform(lo, hi)
+            c = p + self.np_random.uniform(-off, off, 3)
+            if min(np.linalg.norm(c - start), np.linalg.norm(c - goal_pos)) < r + 0.06:
+                continue
+            if any(np.linalg.norm(c - self.obstacles_pos[j]) <= r + self.obstacles_r[j] for j in range(i)):
+                continue
+            self._set_obstacle(c, r, i)
+            mujoco.mj_forward(self.model, self.data)
+            if not self._touches_obstacle(self.data):
                 return True
-        self._set_obstacle(OBSTACLE_PARK, 0.0)
+        self._set_obstacle(OBSTACLE_PARK, 0.0, i)
         return False
 
-    def _set_obstacle(self, c, r):
-        m, g = self.model, self.obstacle_geom
+    def _set_obstacle(self, c, r, i=0):
+        m, g = self.model, self.obstacle_geoms[i]
         m.geom_size[g, 0] = m.geom_rbound[g] = max(r, 1e-3)
         m.geom_aabb[g, 3:] = max(r, 1e-3)
-        self.data.mocap_pos[self.obstacle_mocap] = c
-        self.obstacle_pos, self.obstacle_r = np.array(c, dtype=np.float64), float(r)
+        self.data.mocap_pos[self.obstacle_mocaps[i]] = c
+        self.obstacles_pos[i], self.obstacles_r[i] = np.array(c, dtype=np.float64), float(r)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         mujoco.mj_resetData(self.model, self.data)
-        if self.obstacle:
-            self._set_obstacle(OBSTACLE_PARK, 0.0)
+        for i in range(self.n_obstacles):
+            self._set_obstacle(OBSTACLE_PARK, 0.0, i)
         while True:
             q0 = self.sample_start() if self.random_start else READY_QPOS
             self.data.qpos[self.qadr] = q0

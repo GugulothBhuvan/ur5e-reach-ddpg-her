@@ -226,3 +226,44 @@ def test_her_keeps_collision_penalty(copy_info_dict):
     # non-colliding transitions are relabelled normally (-1 or 0, never -20)
     s = buf._get_virtual_samples(np.arange(last), np.zeros(last, dtype=int))
     assert set(np.unique(s.rewards.numpy())) <= {-1.0, 0.0}
+
+
+# ---------------------------------------------------------------- stretch: several obstacles
+C4_MULTI = dict(C4, n_obstacles=3)
+
+
+@pytest.mark.parametrize("random_start", [True, False])
+def test_multi_obstacle_placement(random_start):
+    e = UR5eReachEnv(**dict(C4_MULTI, random_start=random_start))
+    assert e.observation_space["observation"].shape == (6 + 18 + 12,)
+    assert [e.model.geom(g).name for g in e.obstacle_geoms] == ["obstacle", "obstacle1", "obstacle2"]
+    for i in range(100):
+        obs, info = e.reset(seed=i)
+        start, goal = e.tcp_pos(), e.goal[:3]
+        assert not info["collision"] and not e._touches_obstacle(e.data)
+        assert np.abs(e.obstacle_pos - (start + goal) / 2).max() <= 0.03 + 1e-9  # sphere 0 as in C4
+        for k, (c, r) in enumerate(zip(e.obstacles_pos, e.obstacles_r)):
+            assert 0.05 <= r <= 0.08 and e.model.geom_size[e.obstacle_geoms[k], 0] == r
+            assert np.allclose(obs["observation"][24 + 4 * k: 28 + 4 * k], np.r_[c, r], atol=1e-6)
+            assert np.linalg.norm(c - start) > r + 0.06 and np.linalg.norm(c - goal) > r + 0.06
+            for j in range(k):
+                assert np.linalg.norm(c - e.obstacles_pos[j]) > r + e.obstacles_r[j]
+        for c, f in zip(e.obstacles_pos[1:], (0.3, 0.7)):
+            assert np.abs(c - (start + f * (goal - start))).max() <= e.obstacle_spread + 1e-9
+
+
+@pytest.mark.parametrize("k", [1, 2])
+def test_multi_obstacle_collision(k):
+    e = UR5eReachEnv(obstacle=True, n_obstacles=3)  # ready pose, fixed start
+    e.reset(seed=0)
+    for j in range(3):  # only sphere k in the TCP's path, the others out of the way
+        e._set_obstacle(e.tcp_pos() + [0.13, 0, 0] if j == k else [0.0, -1.0 - j, 0.5], 0.06, j)
+    hit = None
+    for t in range(5):
+        obs, r, term, trunc, info = e.step(np.array([1.0, 0, 0]))
+        if info["collision"]:
+            hit = t
+            break
+    assert hit is not None and term and not info["is_success"] and r == -20.0
+    g = e.data.contact.geom[:e.data.ncon]
+    assert (g == e.obstacle_geoms[k]).any() and not np.isin(g, np.delete(e.obstacle_geoms, k)).any()
